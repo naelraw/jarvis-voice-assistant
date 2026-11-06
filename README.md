@@ -95,6 +95,11 @@ configurés, et tu peux les ignorer :
 Les contributions sont les bienvenues, même petites (documentation, traduction, test, bug reproduit). Lis
 [`CONTRIBUTING.md`](CONTRIBUTING.md). Pour une faille de sécurité : [`SECURITY.md`](SECURITY.md).
 
+## Transparence
+
+Ce projet est développé avec l'aide de **Claude Code** (Anthropic) : l'auteur décide des fonctions, teste sur son
+propre PC et relit ce qui est publié.
+
 ## Licence
 
 [MIT](LICENSE). Les services tiers (Google Gemini, Groq, ElevenLabs, YouTube, etc.) ont leurs propres conditions

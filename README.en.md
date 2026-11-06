@@ -66,6 +66,11 @@ py -3.13 -m venv .venv
 Contributions are welcome, even small ones (docs, translations, tests, reproduced bugs). See
 [`CONTRIBUTING.md`](CONTRIBUTING.md). For security issues: [`SECURITY.md`](SECURITY.md).
 
+## Transparency
+
+This project is developed with the help of **Claude Code** (Anthropic): the author decides the features, tests on
+their own PC and reviews what is published.
+
 ## License
 
 [MIT](LICENSE). Third-party services (Google Gemini, Groq, ElevenLabs, YouTube, …) have their own terms.
