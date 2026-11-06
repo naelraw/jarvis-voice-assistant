@@ -1,0 +1,38 @@
+INSTALLER JARVIS
+================
+
+Windows 10 ou 11, 8 Go de RAM minimum, un micro, une connexion internet.
+
+Deux possibilites :
+
+A) Depuis le depot GitHub (le plus simple)
+   1. Telecharge le depot ("Code" > "Download ZIP") et extrais-le, ou clone-le avec git.
+   2. Ouvre le dossier "installation" et double-clique sur "INSTALLER JARVIS.bat".
+
+B) Sur un deuxieme PC, a partir d'un JARVIS deja installe
+   1. Sur le premier PC : powershell -ExecutionPolicy Bypass -File installation\fabriquer_paquet.ps1
+      (cree "JARVIS-installation.zip" sur le bureau).
+   2. Copie le zip sur l'autre PC (cle USB...), clic droit > "Extraire tout".
+   3. Dans le dossier extrait, double-clique sur "INSTALLER JARVIS.bat".
+
+Pendant l'installation :
+- Si Windows affiche "Windows a protege votre ordinateur" : "Informations complementaires" > "Executer quand meme".
+- Laisse faire (5 a 15 minutes). Il installe Python si besoin, les modules, les raccourcis,
+  et le demarrage automatique avec Windows.
+- A la fin, il te demande ta cle Gemini (obligatoire, gratuite), puis, si tu veux : boites mail,
+  Google Agenda, ElevenLabs, Groq, YouTube, VirusTotal.
+
+A AVOIR SOUS LA MAIN
+- Ta cle Gemini : https://aistudio.google.com/apikey (gratuite).
+- Pour les mails : les mots de passe d'application (Gmail : https://myaccount.google.com/apppasswords).
+- Pour l'agenda : le script cree un petit script Google dans ton compte.
+
+POURQUOI IL FAUT RENTRER LES CLES SUR CHAQUE PC ?
+Elles sont chiffrees par Windows pour un seul PC et un seul compte : elles ne peuvent pas
+etre copiees. C'est voulu, pour ta securite.
+
+APRES L'INSTALLATION
+- "OK Jarvis", double claquement de mains, ou Ctrl+Alt+J pour l'appeler.
+- Dans Parametres, mets ton prenom ("Ton prenom") : JARVIS l'utilise pour te parler.
+- Sur le bureau : "Calibrer le claquement de mains" (a faire une fois sur ce PC).
+- Le premier lancement telecharge la reconnaissance vocale (~500 Mo) : 1 a 3 minutes.

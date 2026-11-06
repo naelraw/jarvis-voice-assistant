@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>JARVIS</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0" stop-color="#0b2236"/>
+      <stop offset="1" stop-color="#02060c"/>
+    </radialGradient>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.22" stop-color="#d9fbff"/>
+      <stop offset="0.5" stop-color="#3fdcff"/>
+      <stop offset="0.78" stop-color="#00a8e8" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#0078c8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0.35" stop-color="#00d2ff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#00d2ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- fond -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="230" fill="url(#halo)"/>
+
+  <g fill="none" stroke="#00d2ff" stroke-linecap="round" filter="url(#glow)">
+    <!-- anneau extérieur fin -->
+    <circle cx="256" cy="256" r="204" stroke-width="2" stroke-opacity="0.35"/>
+    <!-- arcs HUD -->
+    <circle cx="256" cy="256" r="182" stroke-width="12"
+            stroke-dasharray="250 30 50 30 150 61.7" transform="rotate(-100 256 256)"/>
+    <!-- graduations -->
+    <circle cx="256" cy="256" r="156" stroke-width="10" stroke-opacity="0.55"
+            stroke-dasharray="3 13.33" />
+    <!-- anneau intérieur -->
+    <circle cx="256" cy="256" r="134" stroke-width="3" stroke-opacity="0.8"
+            stroke-dasharray="110 22" transform="rotate(20 256 256)"/>
+  </g>
+
+  <!-- coeur lumineux -->
+  <circle cx="256" cy="256" r="118" fill="url(#core)"/>
+  <circle cx="256" cy="256" r="34" fill="#ffffff" opacity="0.95" filter="url(#glow)"/>
+</svg>

@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>JARVIS · Tableau de bord</title>
+<script>window.JTOKEN = "__JTOKEN__";</script>
+<style>
+  :root { --accent: 0,210,255; --frame: rgba(0,210,255,.28); --muted: rgba(214,236,245,.6); --glow: 0 0 12px rgba(0,210,255,.55);
+          --hud: "Bahnschrift","Segoe UI",sans-serif; --mono: "Cascadia Mono",Consolas,monospace; color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50% 40%, #04121f 0%, #02060c 70%); color: #d6ecf5;
+    font-family: var(--hud); overflow: hidden; user-select: none; }
+  #top { position: fixed; top: 0; left: 0; right: 0; height: 48px; display: flex; align-items: center; gap: 14px; padding: 0 18px; z-index: 5; }
+  #top .t { font: 600 12px var(--hud); letter-spacing: 5px; color: #fff; text-shadow: var(--glow); }
+  #top .sp { flex: 1; }
+  #top .clk { font: 300 22px var(--hud); letter-spacing: 3px; color: #e8f6ff; }
+  .chip, .xbtn { height: 30px; padding: 0 12px; border: 1px solid var(--frame); background: rgba(4,16,26,.7); color: rgba(var(--accent), .9);
+    font: 600 10px var(--mono); letter-spacing: 2px; cursor: pointer; display: inline-flex; align-items: center; }
+  .chip.on { color: #fff; border-color: rgb(var(--accent)); background: rgba(var(--accent), .18); }
+  .xbtn { width: 34px; justify-content: center; padding: 0; font-size: 14px; }
+  .chip:hover, .xbtn:hover { color: #fff; border-color: rgba(var(--accent), .9); box-shadow: var(--glow); }
+  #track { position: fixed; top: 48px; bottom: 44px; left: 0; right: 0; overflow: hidden; touch-action: pan-y; cursor: grab; user-select: none; }
+  #strip { display: flex; height: 100%; will-change: transform; transform: translate3d(0,0,0);
+    transition: transform .45s cubic-bezier(.2,.85,.25,1); }
+  #strip.drag { transition: none; } #track.drag { cursor: grabbing; }
+  .pg { flex: 0 0 100%; height: 100%; box-sizing: border-box; padding: 8px clamp(18px, 4vw, 64px) 12px; overflow-y: auto; scrollbar-width: none;
+    contain: layout paint; }
+  .pg::-webkit-scrollbar { display: none; }
+  .pg h2 { margin: 6px 0 16px; font: 600 12px var(--hud); letter-spacing: 6px; color: rgba(var(--accent), .85); text-transform: uppercase; }
+  .pg h2::after { content: ""; display: block; height: 1px; margin-top: 10px; background: linear-gradient(90deg, var(--frame), transparent); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .tile { border: 1px solid var(--frame); background: linear-gradient(180deg, rgba(4,18,30,.8), rgba(2,10,18,.7)); padding: 14px 16px; position: relative; }
+  .tile::before { content: ""; position: absolute; top: -1px; left: -1px; width: 12px; height: 12px; border-top: 2px solid rgb(var(--accent)); border-left: 2px solid rgb(var(--accent)); }
+  .tile .k { font: 10px var(--mono); letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
+  .tile .v { margin-top: 6px; font: 300 clamp(30px, 5.5vw, 62px) var(--hud); color: #fff; text-shadow: var(--glow); line-height: 1.05; }
+  .tile .s { margin-top: 6px; font-size: 14px; color: var(--muted); }
+  .tile .v.txt { font-size: clamp(20px, 2.6vw, 34px); line-height: 1.2; }
+  .warn .v { color: #ffb36b; text-shadow: 0 0 12px rgba(255,150,40,.5); }
+  .big { font: 200 clamp(70px, 16vw, 210px) var(--hud); color: #fff; text-shadow: 0 0 30px rgba(var(--accent), .5); letter-spacing: 6px; line-height: 1; }
+  .big small { font: 300 .22em var(--mono); color: rgb(var(--accent)); letter-spacing: 2px; vertical-align: top; margin-left: 10px; }
+  .date { margin-top: 8px; font: 14px var(--mono); letter-spacing: 8px; color: rgba(var(--accent), .9); text-transform: uppercase; }
+  .row { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .meteo1 { font-size: clamp(16px, 2.4vw, 26px); color: #e8f6ff; }
+  .bars { display: flex; align-items: flex-end; gap: 10px; height: 160px; margin-top: 12px; }
+  .bars div { flex: 1; text-align: center; font: 11px var(--mono); color: var(--muted); }
+  .bars i { display: block; margin: 0 auto 6px; width: 70%; min-height: 3px; background: linear-gradient(180deg, rgb(var(--accent)), rgba(var(--accent), .25)); box-shadow: var(--glow); }
+  .bars div.today i { background: linear-gradient(180deg, #fff, rgba(var(--accent), .6)); }
+  .list { display: flex; flex-direction: column; gap: 6px; }
+  .li { display: flex; gap: 14px; padding: 9px 12px; border-left: 2px solid var(--frame); background: rgba(0,20,40,.35); font-size: 16px; align-items: baseline; }
+  .li b { flex: none; min-width: 64px; font: 600 13px var(--mono); color: rgb(var(--accent)); }
+  .li small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .li .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .box { margin-bottom: 18px; }
+  .box h3 { margin: 0 0 8px; font: 600 14px var(--hud); letter-spacing: 3px; color: #fff; text-transform: uppercase; display: flex; gap: 12px; align-items: center; }
+  .box h3 span { font: 600 12px var(--mono); padding: 1px 8px; border: 1px solid rgb(var(--accent)); background: rgba(var(--accent), .16); }
+  .days { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
+  .day { text-align: center; padding: 14px 8px; border: 1px solid var(--frame); background: rgba(4,18,30,.6); }
+  .day .e { font-size: 38px; } .day .n { font: 11px var(--mono); letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
+  .day .m { font: 300 22px var(--hud); margin-top: 6px; } .day .d { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .hours { display: flex; gap: 8px; overflow-x: auto; margin-top: 14px; scrollbar-width: none; }
+  .hours div { flex: none; width: 74px; text-align: center; padding: 8px 4px; border: 1px solid rgba(var(--accent), .18); font: 12px var(--mono); color: var(--muted); }
+  .hours b { display: block; font: 300 20px var(--hud); color: #fff; margin: 4px 0; }
+  #pg-musique { overflow: hidden; }
+  .music { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: clamp(20px, 4vw, 64px);
+    height: 100%; box-sizing: border-box; padding: 1vh 2vw; text-align: left; }
+  .music .cover { width: min(56vh, 38vw, 440px); aspect-ratio: 1; object-fit: cover; border: 1px solid var(--frame);
+    box-shadow: 0 16px 50px rgba(0,0,0,.6), var(--glow); }
+  .music .cover.none { display: grid; place-items: center; font-size: 12vh; color: rgba(var(--accent), .4); background: rgba(var(--accent), .05); }
+  .music .side { min-width: 0; display: flex; flex-direction: column; gap: clamp(6px, 1.6vh, 16px); }
+  .music .app { font: 11px var(--mono); letter-spacing: 5px; color: rgba(var(--accent), .85); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .music .np { font: 300 clamp(20px, 5vh, 46px) var(--hud); color: #fff; text-shadow: var(--glow); line-height: 1.1;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .music .art { font-size: clamp(13px, 2.4vh, 19px); color: #9fc4d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .music .prog { height: 3px; background: rgba(var(--accent), .18); }
+  .music .prog i { display: block; height: 100%; background: rgb(var(--accent)); box-shadow: var(--glow); transition: width 1s linear; }
+  .music .times { display: flex; justify-content: space-between; margin-top: -6px; font: 10px var(--mono); color: var(--muted); }
+  .music .ctl { justify-content: flex-start; }
+  .music .ctl button { width: min(9vh, 70px); height: min(9vh, 70px); }
+  .music .ctl button.main { width: min(12vh, 92px); height: min(12vh, 92px); }
+  .music .ctl svg { width: 45%; height: 45%; }
+  .music .vol { display: grid; grid-template-columns: 44px 92px 1fr 34px; align-items: center; gap: 10px; }
+  .music .vol button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--frame); background: rgba(var(--accent), .08); color: #d6ecf5;
+    cursor: pointer; display: grid; place-items: center; padding: 0; }
+  .music .vol button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .music .vol.muted button { color: #ff8a8a; } .music .vol.muted input { opacity: .35; }
+  .music .vol b { font: 600 10px var(--mono); letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  .music .vol span { font: 12px var(--mono); color: #cfe8f4; text-align: right; }
+  .music .vol input { width: 100%; -webkit-appearance: none; appearance: none; height: 36px; background: none; cursor: pointer; margin: 0; touch-action: none; }
+  .music .vol input::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: linear-gradient(90deg, rgb(var(--accent)) var(--v, 50%), rgba(var(--accent), .18) var(--v, 50%)); }
+  .music .vol input::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; margin-top: -9.5px; border-radius: 50%; background: #e8f8ff; box-shadow: var(--glow); }
+  @media (max-aspect-ratio: 1/1) { .music { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+    .music .cover { width: min(34vh, 70vw); } .music .side { width: 100%; } .music .ctl { justify-content: center; } }
+  /* ---- page Jeu ---- */
+  #pg-jeu { overflow: hidden; }
+  .jeu { height: 100%; display: flex; flex-direction: column; gap: clamp(10px, 2.2vh, 22px); justify-content: center; }
+  .jg-game { font: 300 clamp(24px, 4.5vh, 44px) var(--hud); color: #fff; text-shadow: var(--glow); letter-spacing: 2px; }
+  .jg-sub { font: 11px var(--mono); letter-spacing: 4px; color: rgba(var(--accent), .85); text-transform: uppercase; margin-top: 4px; }
+  .jg-gauges { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(8px, 1.5vw, 18px); }
+  .gauge { position: relative; aspect-ratio: 1; display: grid; place-items: center; border: 1px solid var(--frame);
+    background: radial-gradient(circle, rgba(0,160,255,.10), rgba(2,10,18,.7) 70%); }
+  .gauge svg { position: absolute; inset: 8%; width: 84%; height: 84%; transform: rotate(-90deg); }
+  .gauge .bg { fill: none; stroke: rgba(var(--accent), .12); stroke-width: 6; }
+  .gauge .fg { fill: none; stroke: rgb(var(--accent)); stroke-width: 6; stroke-linecap: round; filter: drop-shadow(0 0 5px rgba(0,210,255,.7)); transition: stroke-dasharray .8s ease; }
+  .gauge.warn .fg { stroke: #ff6b6b; filter: drop-shadow(0 0 5px rgba(255,90,90,.7)); } .gauge.warn b { color: #ffb0b0; }
+  .gauge .gv { position: relative; text-align: center; display: flex; flex-direction: column; align-items: center; }
+  .gauge b { font: 300 clamp(20px, 3.6vh, 38px) var(--hud); color: #fff; line-height: 1; }
+  .gauge b small { font-size: .45em; margin-left: 2px; color: var(--muted); }
+  .gauge span { margin-top: 4px; font: 600 9px var(--mono); letter-spacing: 2px; text-transform: uppercase; color: rgba(var(--accent), .85); }
+  .gauge em { font: 9px var(--mono); font-style: normal; color: var(--muted); margin-top: 2px; }
+  .jg-box { border: 1px solid var(--frame); padding: 12px 14px; background: rgba(2,12,22,.6); display: flex; align-items: baseline; gap: 14px; }
+  .jg-box small { font: 600 9.5px var(--mono); letter-spacing: 3px; color: var(--muted); }
+  .jg-box b { font: 300 32px var(--hud); color: #fff; } .jg-box span { font-size: 12px; color: #9fc4d6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jg-music { display: flex; align-items: center; gap: 12px; border: 1px solid var(--frame); padding: 10px; background: rgba(2,12,22,.6); }
+  .jg-music img, .jg-music i { width: 56px; height: 56px; object-fit: cover; flex: 0 0 56px; display: grid; place-items: center; font-size: 26px; color: rgba(var(--accent), .5); font-style: normal; border: 1px solid var(--frame); }
+  .jg-mt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .jg-mt b { font: 600 14px var(--hud); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jg-mt span { font-size: 12px; color: #9fc4d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jg-ctl { display: flex; gap: 6px; } .jg-ctl button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--frame); background: rgba(var(--accent), .08); color: #d6ecf5; cursor: pointer; display: grid; place-items: center; padding: 0; }
+  .jg-ctl button.main { border-color: rgb(var(--accent)); background: rgba(var(--accent), .16); }
+  .jg-ctl svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  /* bande de la tablette en jeu : la page Jeu seule, en colonne */
+  html.hud #top .chip, html.hud #x { display: none !important; }
+  html.hud #dots { height: 38px; } html.hud #track { bottom: 38px; }
+  html.hud .jg-gauges { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html.hud #top .t { font-size: 0; } html.hud #top .t::before { content: "J.A.R.V.I.S"; font-size: 11px; }
+  html.hud .pg { padding: 6px 12px 10px; }
+  /* bande étroite (Discord prend le reste de la tablette) : tout se resserre, rien n'est coupé */
+  @media (max-width: 460px) {
+    .jeu { gap: 10px; justify-content: flex-start; padding-top: 6px; }
+    .jg-game { font-size: 24px; letter-spacing: 1px; } .jg-sub { font-size: 9.5px; letter-spacing: 2px; }
+    .jg-gauges { gap: 8px; } .gauge b { font-size: 24px; } .gauge span { font-size: 8px; letter-spacing: 1px; } .gauge em { font-size: 8px; }
+    .jg-box { flex-wrap: wrap; gap: 4px 10px; padding: 8px 10px; } .jg-box b { font-size: 24px; } .jg-box span { flex-basis: 100%; }
+    .jg-music { flex-wrap: wrap; gap: 8px; padding: 8px; } .jg-music img, .jg-music i { width: 44px; height: 44px; flex-basis: 44px; }
+    .jg-mt { flex: 1 1 calc(100% - 60px); } .jg-ctl { flex: 1 1 100%; justify-content: center; }
+    .jg-ctl button { width: 46px; height: 46px; }
+  }
+  /* ---- page Deck (gros boutons façon Stream Deck) ---- */
+  .dk-g { margin-bottom: 16px; }
+  .dk-g h2 { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .dk-g h2 button { margin-left: auto; height: 24px; padding: 0 10px; border: 1px solid var(--frame); background: none; color: var(--muted); font: 600 9px var(--mono); letter-spacing: 2px; cursor: pointer; }
+  .dgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+  .dk { position: relative; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px 6px;
+    border: 1px solid var(--frame); background: linear-gradient(180deg, rgba(6,24,38,.85), rgba(2,10,18,.8)); color: #cfe8f4; cursor: pointer;
+    font: 600 10.5px var(--mono); letter-spacing: 1px; text-transform: uppercase; text-align: center; line-height: 1.25; transition: transform .1s, box-shadow .2s; }
+  .dk::before { content: ""; position: absolute; top: -1px; left: -1px; width: 10px; height: 10px; border-top: 2px solid rgba(var(--accent), .8); border-left: 2px solid rgba(var(--accent), .8); }
+  .dk svg { width: 38%; height: 38%; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .dk:hover { border-color: rgba(var(--accent), .8); box-shadow: var(--glow); color: #fff; }
+  .dk:active { transform: scale(.94); }
+  .dk.on { border-color: rgb(var(--accent)); background: rgba(var(--accent), .2); color: #fff; box-shadow: var(--glow); }
+  .dk.off { border-color: #ff6b6b; background: rgba(255,80,80,.13); color: #ffb0b0; }
+  .dk.live.on { border-color: #ff4d6d; background: rgba(255,40,80,.22); box-shadow: 0 0 18px rgba(255,40,80,.55); animation: lvp 2s infinite; }
+  .dk.ask { border-color: #ffb36b; color: #ffd9b0; background: rgba(255,150,40,.16); animation: lvp .8s infinite; }
+  @keyframes lvp { 50% { box-shadow: 0 0 4px rgba(255,80,80,.2); } }
+  .dk .del { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: #ff4d6d; color: #fff; display: grid; place-items: center; font-size: 12px; }
+  .dk.add { border-style: dashed; color: var(--muted); }
+  .dk-form { display: none; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .dk-form.open { display: flex; }
+  .dk-form input { flex: 1 1 140px; height: 38px; padding: 0 10px; background: rgba(2,12,22,.8); border: 1px solid var(--frame); color: #fff; font: 14px var(--hud); user-select: text; }
+  .dk-form button { height: 38px; padding: 0 16px; border: 1px solid rgb(var(--accent)); background: rgba(var(--accent), .18); color: #fff; font: 600 10px var(--mono); letter-spacing: 2px; cursor: pointer; }
+  .lv { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; margin-bottom: 14px; border: 1px solid var(--frame); background: rgba(2,12,22,.6);
+    font: 600 11px var(--mono); letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  .lv b { color: #ff4d6d; text-shadow: 0 0 10px rgba(255,40,80,.7); } .lv .w { color: #ffb36b; } .lv .r { color: #ff8a8a; }
+  #pg-chat { padding: 0; overflow: hidden; }
+  #pg-chat iframe { width: 100%; height: 100%; border: 0; background: #0e0e10; }
+  #toast { position: fixed; left: 50%; bottom: 56px; transform: translate(-50%, 20px); opacity: 0; transition: .25s; z-index: 9; max-width: 92vw;
+    padding: 10px 16px; border: 1px solid rgb(var(--accent)); background: rgba(2,14,24,.95); color: #fff; font: 13px var(--hud); box-shadow: var(--glow); pointer-events: none; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+  html.deck #top .chip, html.deck #x, html.deck #dots { display: none !important; }
+  html.deck #track { bottom: 0; } html.deck #top { display: none; } html.deck #track { top: 0; }
+  @media (max-width: 460px) { .dgrid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; } .dk { font-size: 9px; letter-spacing: .5px; gap: 5px; }
+    .lv { font-size: 9.5px; letter-spacing: 1px; } }
+  .ctl { display: flex; gap: 16px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .ctl button { width: 76px; height: 76px; border-radius: 50%; border: 1px solid var(--frame); background: rgba(var(--accent), .08); color: #d6ecf5; cursor: pointer; display: grid; place-items: center; padding: 0; }
+  .ctl button.main { width: 104px; height: 104px; border-color: rgb(var(--accent)); box-shadow: var(--glow); background: rgba(var(--accent), .16); }
+  .ctl button:active { transform: scale(.93); }
+  .ctl svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .ctl .main svg { width: 46px; height: 46px; }
+  .ctl button.sm { width: 58px; height: 58px; } .ctl button.sm svg { width: 26px; height: 26px; }
+  .ctl .lbl { font: 11px var(--mono); letter-spacing: 3px; color: var(--muted); }
+  .empty { padding: 40px 0; color: var(--muted); font-size: 16px; }
+  #dots { position: fixed; bottom: 0; left: 0; right: 0; height: 44px; display: flex; align-items: center; justify-content: center; gap: 10px; z-index: 5; }
+  #dots button { border: 0; background: none; color: var(--muted); font: 600 10px var(--mono); letter-spacing: 2px; padding: 8px 10px; cursor: pointer; text-transform: uppercase; border-bottom: 2px solid transparent; }
+  #dots button.on { color: #fff; border-bottom-color: rgb(var(--accent)); text-shadow: var(--glow); }
+  @media (max-width: 760px) { #dots button { padding: 8px 5px; letter-spacing: 1px; } .ctl button { width: 64px; height: 64px; } .ctl button.main { width: 88px; height: 88px; } }
+</style></head>
+<body>
+<div id="top"><span class="t">J.A.R.V.I.S · TABLEAU DE BORD</span><span class="sp"></span><span class="clk" id="clk"></span>
+  <button class="chip" id="auto" title="Change de page tout seul toutes les 25 s">AUTO</button><button class="xbtn" id="x" title="Fermer (Échap)">✕</button></div>
+<div id="track"></div>
+<div id="dots"></div>
+<div id="toast"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const tok = encodeURIComponent(window.JTOKEN || '');
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const get = (p) => fetch(p + (p.includes('?') ? '&' : '?') + 'token=' + tok).then(r => r.json());
+const post = (p, b) => fetch(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: window.JTOKEN, ...b }) }).then(r => r.json());
+const HUD = new URLSearchParams(location.search).has('hud');   // bande de la tablette pendant une partie
+const DECK = new URLSearchParams(location.search).has('deck');  // la page Deck seule (onglet « Deck » de JARVIS)
+const PAGES = DECK ? [['deck', 'Deck']] : HUD ? [['jeu', 'Jeu'], ['deck', 'Deck'], ['chat', 'Chat']]
+  : [['accueil', 'Accueil'], ['jeu', 'Jeu'], ['deck', 'Deck'], ['chat', 'Chat'], ['radar', 'PC Radar'], ['meteo', 'Météo'], ['mails', 'Mails'], ['agenda', 'Agenda'], ['musique', 'Musique']];
+if (HUD) document.documentElement.classList.add('hud');
+if (DECK) document.documentElement.classList.add('deck');
+let DK = null, askId = '', askT = 0, deckEdit = false;
+let JG = null;
+let D = null, M = null, MU = null, cur = 0, lastTouch = 0;
+const J = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], MO = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const ICON = { play: '<path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>', pause: '<path d="M9 5v14M15 5v14"/>', next: '<path d="M6 5v14l9-7zM18 5v14"/>', prev: '<path d="M18 5v14l-9-7zM6 5v14"/>',
+  vup: '<path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>', vdn: '<path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 0 1 0 7"/>', mute: '<path d="M4 9v6h4l5 4V5L8 9zM16 9l5 6M21 9l-5 6"/>' };
+const emoji = (d) => { d = (d || '').toLowerCase(); return /orage/.test(d) ? '⛈️' : /neige|grésil/.test(d) ? '❄️' : /bruine/.test(d) ? '🌦️' : /pluie|averse/.test(d) ? '🌧️' : /brouillard|brume/.test(d) ? '🌫️' : /nuage|couvert/.test(d) ? '☁️' : /éclaircie|partiellement/.test(d) ? '⛅' : /soleil|clair|ensoleill/.test(d) ? '☀️' : '🌤️'; };
+const tile = (k, v, s, warn) => `<div class="tile${warn ? ' warn' : ''}"><div class="k">${esc(k)}</div><div class="v${String(v).length > 9 ? ' txt' : ''}">${esc(v)}</div>${s ? `<div class="s">${esc(s)}</div>` : ''}</div>`;
+
+function clock() {
+  const n = new Date(), hm = n.toTimeString().slice(0, 5);
+  $('clk').textContent = hm;
+  const big = document.getElementById('bigclk'); if (big) big.innerHTML = hm + `<small>${String(n.getSeconds()).padStart(2, '0')}</small>`;
+  const dd = document.getElementById('bigdate'); if (dd) dd.textContent = `${J[n.getDay()]} ${n.getDate()} ${MO[n.getMonth()]}`;
+}
+function nextEvent() {
+  const a = D && D.agenda; if (!a || !a.ok) return null;
+  const now = new Date().toTimeString().slice(0, 5);
+  return a.events.find(e => e.today && (e.time === 'Journée' || e.time >= now)) || a.events.find(e => !e.today && !e.past) || null;
+}
+const unread = () => D && D.mails && D.mails.ok ? D.mails.boxes.reduce((s, b) => s + (b.count || 0), 0) : null;
+
+function pageAccueil() {
+  const e = nextEvent(), p = D && D.pcradar, r = D && D.reminders && D.reminders[0];
+  return `<div class="row"><div><div class="big" id="bigclk"></div><div class="date" id="bigdate"></div></div>
+    <div class="meteo1">${M && M.now ? emoji(M.now.desc) + ' ' + esc(M.now.temp) + '° · ' + esc(M.now.desc) + '<br><small style="color:var(--muted)">' + esc(M.area) + '</small>' : esc((D && D.weather) || '')}</div></div>
+    <div class="tiles">
+    ${tile('Prochain rendez-vous', e ? e.title : 'Rien de prévu', e ? e.time + (e.where ? ' · ' + e.where : '') : '')}
+    ${tile('Visiteurs aujourd’hui', p && p.ok ? p.today : '–', p && p.ok ? 'hier : ' + p.yesterday : 'PC Radar non connecté', p && p.ok && (p.tickets + p.suspects) > 0)}
+    ${tile('Mails non lus', unread() === null ? '–' : unread().toLocaleString('fr-FR'), '')}
+    ${tile('Prochain rappel', r ? r.time : '–', r ? r.text : 'Aucun rappel')}
+    ${tile('Musique', MU && MU.title ? '♪' : '–', MU && MU.title ? MU.title : 'Rien en lecture')}
+    </div>`;
+}
+function pageJeu() {
+  const s = (JG && JG.stats) || {};
+  const ring = (label, v, sub, warn) => { const p = Math.max(0, Math.min(100, +v || 0)), C = 2 * Math.PI * 42;
+    return `<div class="gauge${warn ? ' warn' : ''}"><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="42"/>
+      <circle class="fg" cx="50" cy="50" r="42" stroke-dasharray="${(C * p / 100).toFixed(1)} ${C.toFixed(1)}"/></svg>
+      <div class="gv"><b>${v == null ? '–' : Math.round(v)}<small>%</small></b><span>${label}</span>${sub ? `<em>${sub}</em>` : ''}</div></div>`; };
+  const game = JG && JG.games && JG.games.length ? JG.games.join(', ') : 'Aucun jeu';
+  const ping = s.ping == null ? '–' : Math.round(s.ping);
+  const b = (a, ic, cls, t) => `<button class="${cls || ''}" data-m="${a}" title="${t}"><svg viewBox="0 0 24 24">${ICON[ic]}</svg></button>`;
+  return `<div class="jeu">${DK && DK.stream && DK.stream.live ? liveBar() : ''}
+    <div class="jg-head"><div class="jg-game">${esc(game)}</div>
+      <div class="jg-sub">${JG && JG.session_min ? 'En jeu depuis ' + (JG.session_min >= 60 ? Math.floor(JG.session_min / 60) + ' h ' + String(JG.session_min % 60).padStart(2, '0') : JG.session_min + ' min') : JG && JG.games && JG.games.length ? 'En jeu' : 'Prêt à jouer'}</div></div>
+    <div class="jg-gauges">
+      ${ring('Processeur', s.cpu, '', s.cpu > 90)}${ring('Carte graphique', s.gpu, s.vram_go != null ? s.vram_go + ' Go VRAM' : '', s.gpu > 97)}
+      ${ring('Mémoire', s.ram, s.ram_go != null ? s.ram_go + ' / ' + s.ram_tot + ' Go' : '', s.ram > 90)}
+      <div class="gauge ping${s.ping > 80 ? ' warn' : ''}"><div class="gv"><b>${ping}<small>ms</small></b><span>Ping</span><em>internet</em></div></div>
+    </div>
+    <div class="jg-row"><div class="jg-box"><small>CLIPS DE LA PARTIE</small><b>${JG ? JG.clips : '–'}</b><span>${JG && JG.last_clip ? esc(JG.last_clip) : 'dis « Jarvis, clip »'}</span></div></div>
+    <div class="jg-music">${MU && MU.cover ? `<img src="${esc(MU.cover)}" alt="">` : '<i>♪</i>'}
+      <div class="jg-mt"><b>${esc(MU && (MU.name || MU.title) ? (MU.name || MU.title) : 'Pas de musique')}</b><span>${esc(MU && MU.artist ? MU.artist : '')}</span></div>
+      <div class="jg-ctl">${b('precedent', 'prev', '', 'Précédent')}${b('pause', MU && MU.playing ? 'pause' : 'play', 'main', 'Lecture / pause')}${b('suivant', 'next', '', 'Suivant')}</div></div>
+  </div>`;
+}
+function pageRadar() {
+  const p = D && D.pcradar;
+  if (!p || !p.ok) return `<h2>PC Radar</h2><div class="empty">PC Radar n’est pas connecté.</div>`;
+  const wk = p.week || [], mx = Math.max(1, ...wk), n = new Date();
+  const bars = wk.map((v, i) => { const d = new Date(n); d.setDate(n.getDate() - (wk.length - 1 - i)); const t = i === wk.length - 1;
+    return `<div class="${t ? 'today' : ''}"><i style="height:${Math.round(v / mx * 120)}px"></i>${v}<br>${J[d.getDay()].slice(0, 3)}</div>`; }).join('');
+  return `<h2>PC Radar</h2><div class="tiles">
+    ${tile('Visiteurs aujourd’hui', p.today, 'hier : ' + p.yesterday)}
+    ${tile('Tickets à traiter', p.tickets, '', p.tickets > 0)}
+    ${tile('Prix suspects', p.suspects, '', p.suspects > 0)}
+    ${tile('Annonces isolées', p.isolees, '', p.isolees > 0)}
+    ${tile('Fiches de prix en retard', p.retard, '', p.retard > 0)}</div>
+    <h2 style="margin-top:22px">7 derniers jours</h2><div class="bars">${bars}</div>`;
+}
+function pageMeteo() {
+  if (!M || !M.now) return `<h2>Météo</h2><div class="empty">Chargement de la météo…</div>`;
+  const n = M.now;
+  return `<h2>Météo · ${esc(M.area)}</h2>
+    <div class="row"><div class="big" style="font-size:clamp(70px,14vw,170px)">${emoji(n.desc)} ${esc(n.temp)}°</div>
+    <div class="meteo1">${esc(n.desc)}<br><small style="color:var(--muted)">ressenti ${esc(n.feels)}° · vent ${esc(n.wind)} km/h · humidité ${esc(n.humidity)} %</small></div></div>
+    <div class="days">${M.days.map(d => `<div class="day"><div class="n">${esc(d.label)}</div><div class="e">${emoji(d.desc)}</div><div class="m">${esc(d.min)}° / ${esc(d.max)}°</div><div class="d">${esc(d.desc)}</div></div>`).join('')}</div>
+    <div class="hours">${M.hours.map(h => `<div>${esc(h.h)}<b>${esc(h.temp)}°</b>${emoji(h.desc)}</div>`).join('')}</div>`;
+}
+function pageMails() {
+  const m = D && D.mails;
+  if (!m || !m.ok) return `<h2>Mails</h2><div class="empty">${esc((m && m.why) || 'Boîtes mail non configurées.')}</div>`;
+  return `<h2>Mails</h2>` + m.boxes.map(b => `<div class="box"><h3>${esc(b.label)} <span>${(b.count || 0).toLocaleString('fr-FR')} non lus</span></h3><div class="list">${
+    (b.last || []).slice(0, 6).map(x => `<div class="li"><div class="t"><b style="display:inline;min-width:0;margin-right:10px">${esc(x.from)}</b>${esc(x.subject)}</div></div>`).join('') || '<div class="empty">Rien de nouveau.</div>'}</div></div>`).join('');
+}
+function pageAgenda() {
+  const a = D && D.agenda, r = (D && D.reminders) || [];
+  const ev = a && a.ok ? a.events : [];
+  return `<h2>Agenda</h2><div class="list">${ev.map(e => `<div class="li"><b>${esc(e.today ? e.time : e.day + ' ' + e.time)}</b><div class="t">${esc(e.title)}${e.where ? `<small>${esc(e.where)}</small>` : ''}</div></div>`).join('') || `<div class="empty">${a && !a.ok ? 'Agenda non connecté.' : 'Rien de prévu cette semaine.'}</div>`}</div>
+    <h2 style="margin-top:22px">Rappels</h2><div class="list">${r.slice(0, 8).map(x => `<div class="li"><b>${esc((x.day === "Aujourd'hui" ? '' : x.day + ' ') + x.time)}</b><div class="t">${esc(x.text)}</div></div>`).join('') || '<div class="empty">Aucun rappel.</div>'}</div>`;
+}
+function pageMusique() {
+  const b = (a, ic, cls, t) => `<button class="${cls || ''}" data-m="${a}" title="${t}"><svg viewBox="0 0 24 24">${ICON[ic]}</svg></button>`;
+  const cov = MU && MU.cover ? `<img class="cover" src="${esc(MU.cover)}" alt="">` : '<div class="cover none">♪</div>';
+  const fmt = (x) => { x = Math.max(0, Math.round(x || 0)); return Math.floor(x / 60) + ':' + String(x % 60).padStart(2, '0'); };
+  const prog = MU && MU.dur ? `<div class="prog"><i style="width:${Math.min(100, MU.pos / MU.dur * 100).toFixed(1)}%"></i></div>
+    <div class="times"><span>${fmt(MU.pos)}</span><span>${fmt(MU.dur)}</span></div>` : '';
+  // curseurs : la musique (si elle a un son ouvert sur le PC) + le volume général
+  const vrow = (act, mute, label, v, muted, t) => `<div class="vol${muted ? ' muted' : ''}"><button data-a="${mute}" title="Couper / remettre le son">
+    <svg viewBox="0 0 24 24">${ICON[muted ? 'mute' : 'vup']}</svg></button><b>${esc(label)}</b>
+    <input type="range" min="0" max="100" value="${v}" style="--v:${v}%" data-act="${act}" title="${esc(t)}"><span>${v}</span></div>`;
+  const mx = (MU && MU.mixer) || {};
+  const vols = (MU && MU.vol >= 0 ? vrow('vol', 'mute', MU.app || 'Musique', MU.vol, MU.muted, 'Volume de ' + (MU.app || "l'appli") + ' seulement') : '')
+    + (mx.master >= 0 ? vrow('mastervol', 'mastermute', 'Général', mx.master, mx.muted, 'Volume général du PC') : '');
+  return `<div class="music">${cov}<div class="side"><div class="app">${esc((MU && MU.app) || 'Musique')}${MU && MU.album ? ' · ' + esc(MU.album) : ''}</div>
+    <div class="np">${esc(MU && (MU.name || MU.title) ? (MU.name || MU.title) : 'Aucune musique détectée')}</div>
+    ${MU && MU.artist ? `<div class="art">${esc(MU.artist)}</div>` : ''}${prog}
+    <div class="ctl">${b('precedent', 'prev', '', 'Précédent')}${b('pause', MU && MU.playing ? 'pause' : 'play', 'main', 'Lecture / pause')}${b('suivant', 'next', '', 'Suivant')}</div>
+    ${vols}</div></div>`;
+}
+// ---- Deck ----
+const DICON = { live: '<circle cx="12" cy="12" r="2.5"/><path d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', son: ICON.vup,
+  ecran: '<rect x="3" y="4" width="18" height="13" rx="1"/><path d="M8 21h8M12 17v4"/>', clip: '<path d="M4 8h16v11H4zM4 8l3-4M10 8l3-4M16 8l3-4"/>',
+  rec: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/>', scene: '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 10h18"/>',
+  jarvis: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',
+  photo: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', dossier: '<path d="M3 6h6l2 2h10v11H3z"/>',
+  prev: ICON.prev, next: ICON.next, play: ICON.play,
+  twitch: '<path d="M5 3L3 7v13h5v3h3l3-3h4l4-4V3zM11 8v5M16 8v5"/>', chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  obs: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="7.5" r="2.3"/><circle cx="8" cy="14.5" r="2.3"/><circle cx="16" cy="14.5" r="2.3"/>',
+  discord: '<path d="M7 7c3-1.5 7-1.5 10 0l2 9c-2 1.5-4 2-5 2l-1-2M7 7l-2 9c2 1.5 4 2 5 2l1-2M9 16c2 .8 4 .8 6 0"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/>',
+  youtube: '<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/>',
+  musique: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  perso: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4l-5.4 3 1.3-6-4.5-4.1 6-.7z"/>', plus: '<path d="M12 5v14M5 12h14"/>' };
+function liveBar() {
+  const s = DK && DK.stream; if (!s) return '';
+  if (!s.obs) return '<div class="lv">OBS fermé</div>';
+  const pct = s.images ? (100 * s.perdues / s.images) : 0;
+  return `<div class="lv">${s.live ? `<b>● EN DIRECT</b><span>${esc(s.duree)}</span><span class="${pct > 2 ? 'w' : ''}">${pct.toFixed(1)} % perdues</span>` : '<span>Hors ligne</span>'}
+    ${s.micro_muet ? '<span class="r">Micro coupé</span>' : ''}${s.bureau_muet ? '<span class="r">Son PC coupé</span>' : ''}
+    ${s.ecran_pause ? '<span class="r">Écran masqué</span>' : ''}${s.rec ? `<span>● Enreg. ${esc(s.rec_duree)}</span>` : ''}
+    ${s.alerte ? `<span class="w">⚠ ${esc(s.alerte)}</span>` : ''}</div>`;
+}
+function pageDeck() {
+  if (!DK) return '<h2>Deck</h2><div class="empty">Chargement…</div>';
+  const groups = [];
+  for (const b of DK.boutons) { let g = groups.find(x => x.n === b.g); if (!g) groups.push(g = { n: b.g, b: [] }); g.b.push(b); }
+  if (!groups.some(g => g.n === 'Perso')) groups.push({ n: 'Perso', b: [] });
+  const btn = (b) => { const ask = askId === b.id && Date.now() - askT < 5000;
+    return `<button class="dk${b.on ? ' on' : ''}${b.off ? ' off' : ''}${b.id === 'live' ? ' live' : ''}${ask ? ' ask' : ''}" data-dk="${esc(b.id)}" title="${esc(b.cible || b.nom)}">
+      <svg viewBox="0 0 24 24">${DICON[b.ico] || DICON.perso}</svg><span>${esc(ask ? 'Appuie encore pour confirmer' : b.nom)}</span>
+      ${deckEdit && b.g === 'Perso' ? `<span class="del" data-del="${esc(b.nom)}">✕</span>` : ''}</button>`; };
+  return liveBar() + groups.map(g => `<div class="dk-g"><h2>${esc(g.n)}${g.n === 'Perso' ? `<button data-dedit>${deckEdit ? 'Terminé' : 'Modifier'}</button>` : ''}</h2>
+    <div class="dgrid">${g.b.map(btn).join('')}${g.n === 'Perso' ? `<button class="dk add" data-dadd><svg viewBox="0 0 24 24">${DICON.plus}</svg><span>Ajouter</span></button>` : ''}</div>
+    ${g.n === 'Perso' ? `<div class="dk-form${deckForm ? ' open' : ''}" id="dkf"><input id="dkn" placeholder="Nom du bouton (ex. Netflix)" maxlength="24">
+      <input id="dkc" placeholder="Site, appli ou dossier (ex. netflix.com)"><button data-dsave>Ajouter</button></div>` : ''}</div>`).join('');
+}
+let deckForm = false;
+function pageChat() {
+  const ch = DK && DK.stream && DK.stream.chaine;
+  if (!ch) return '<h2>Chat Twitch</h2><div class="empty">Chaîne Twitch introuvable : connecte ton compte Twitch dans OBS (Paramètres › Stream).</div>';
+  return `<iframe src="https://www.twitch.tv/embed/${encodeURIComponent(ch)}/chat?parent=127.0.0.1&parent=localhost&darkpopout" title="Chat Twitch"></iframe>`;
+}
+let toastT = 0;
+function toast(m) { if (!m) return; const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 3200); }
+function deckPress(id) {
+  lastTouch = Date.now();
+  const confirme = askId === id && Date.now() - askT < 5000;
+  post('/api/deck', { id, confirme }).then(r => {
+    if (r.confirmer) { askId = id; askT = Date.now(); render('deck'); setTimeout(() => render('deck'), 5100); toast(r.msg.replace('À CONFIRMER : ', '')); return; }
+    askId = ''; toast(r.msg); pollDeck(true); if (['prev', 'toggle', 'next'].includes(id)) setTimeout(pollMusic, 700);
+  }).catch(() => toast('JARVIS ne répond pas'));
+}
+document.addEventListener('click', (e) => {
+  const d = e.target.closest('[data-del]');
+  if (d) { e.stopPropagation(); post('/api/deck', { supprime: 1, nom: d.dataset.del }).then(r => { toast(r.msg); pollDeck(true); }); return; }
+  const b = e.target.closest('[data-dk]'); if (b) { if (!deckEdit) deckPress(b.dataset.dk); return; }
+  if (e.target.closest('[data-dedit]')) { deckEdit = !deckEdit; render('deck'); return; }
+  if (e.target.closest('[data-dadd]')) { deckForm = !deckForm; render('deck'); if (deckForm) setTimeout(() => { const n = $('dkn'); if (n) n.focus(); }, 50); return; }
+  if (e.target.closest('[data-dsave]')) { const nom = $('dkn').value.trim(), cible = $('dkc').value.trim(); if (!nom || !cible) { toast('Il faut un nom et ce que le bouton ouvre'); return; }
+    post('/api/deck', { ajoute: 1, nom, cible }).then(r => { toast(r.msg); deckForm = false; pollDeck(true); }); }
+});
+async function pollDeck(force) {
+  const k = PAGES[cur][0];
+  if (!force && (document.hidden || deckForm || !(k === 'deck' || k === 'jeu' || (k === 'chat' && !DK)))) return;
+  try { DK = await get('/api/deck'); render('deck'); render('jeu'); if (!sigs.chat || sigs.chat.indexOf('iframe') < 0) render('chat'); } catch (e) {}
+}
+const BUILD = { jeu: pageJeu, accueil: pageAccueil, radar: pageRadar, meteo: pageMeteo, mails: pageMails, agenda: pageAgenda, musique: pageMusique,
+  deck: pageDeck, chat: pageChat };
+const sigs = {};
+let moving = 0;   // pendant un glissement : pas de mise à jour des pages (elle ferait saccader l'animation)
+function render(only) {
+  const track = $('track');
+  if (track.children.length && (dragging || performance.now() < moving)) { setTimeout(() => render(only), 300); return; }
+  if (!track.children.length) {
+    track.innerHTML = '<div id="strip">' + PAGES.map(([k]) => `<section class="pg" id="pg-${k}"></section>`).join('') + '</div>';
+    $('dots').innerHTML = PAGES.map(([k, n], i) => `<button data-i="${i}">${n}</button>`).join('');
+  }
+  for (const [k] of PAGES) {
+    if (only && only !== k) continue;
+    const html = BUILD[k](), el = $('pg-' + k);
+    if (sigs[k] !== html) { const sc = el.scrollTop; el.innerHTML = html; el.scrollTop = sc; sigs[k] = html; }
+  }
+  clock();
+}
+function place(px, anim) {
+  const s = $('strip'); if (!s) return;
+  s.classList.toggle('drag', !anim);
+  s.style.transform = `translate3d(${px}px,0,0)`;
+}
+function go(i, user) {
+  cur = (i + PAGES.length) % PAGES.length;
+  moving = performance.now() + 500;
+  place(-cur * $('track').clientWidth, true);
+  if (user) lastTouch = Date.now();
+  dots();
+}
+function dots() { document.querySelectorAll('#dots button').forEach((b, i) => b.classList.toggle('on', i === cur)); }
+
+// glisser (doigt ou souris) : la page suit en direct, au lâcher elle file vers la suivante (élan pris en compte)
+const track = $('track');
+let dragging = null, raf = 0, justDragged = 0;
+track.addEventListener('pointerdown', (e) => { lastTouch = Date.now(); if (e.button > 0 || e.target.closest('button, input')) return;
+  dragging = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, moved: false, axis: '', hist: [[performance.now(), e.clientX]] }; });
+addEventListener('pointermove', (e) => { const d = dragging; if (!d || e.pointerId !== d.id) return;
+  const dx = e.clientX - d.x, dy = e.clientY - d.y;
+  if (!d.axis && Math.hypot(dx, dy) > 7) {
+    d.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    if (d.axis === 'y') { dragging = null; return; }   // geste vertical : on laisse défiler la page
+    d.moved = true; track.classList.add('drag'); try { track.setPointerCapture(e.pointerId); } catch (_) {}
+  }
+  if (!d.moved) return;
+  const w = track.clientWidth, n = PAGES.length;
+  let off = dx; if ((cur === 0 && dx > 0) || (cur === n - 1 && dx < 0)) off = dx * 0.3;   // résistance aux bords
+  d.dx = dx; d.hist.push([performance.now(), e.clientX]); if (d.hist.length > 6) d.hist.shift();
+  cancelAnimationFrame(raf); raf = requestAnimationFrame(() => place(-cur * w + off, false)); });
+function endDrag(e) { const d = dragging; if (!d || (e && e.pointerId !== d.id)) return; dragging = null;
+  if (!d.moved) return;
+  cancelAnimationFrame(raf); track.classList.remove('drag'); justDragged = Date.now();
+  const w = track.clientWidth, [t0, x0] = d.hist[0], [t1, x1] = d.hist[d.hist.length - 1];
+  const v = (x1 - x0) / Math.max(1, t1 - t0);   // px/ms
+  let i = cur; if (d.dx < -w * 0.18 || v < -0.45) i++; else if (d.dx > w * 0.18 || v > 0.45) i--;
+  go(Math.max(0, Math.min(PAGES.length - 1, i)), true); }
+addEventListener('pointerup', endDrag); addEventListener('pointercancel', endDrag);
+track.addEventListener('click', (e) => { if (Date.now() - justDragged < 250) { e.stopPropagation(); e.preventDefault(); } }, true);
+// pavé tactile / molette horizontale : une page par geste
+let wheelT = 0;
+track.addEventListener('wheel', (e) => { if (Math.abs(e.deltaX) < Math.abs(e.deltaY) || Math.abs(e.deltaX) < 25) return;
+  e.preventDefault(); if (performance.now() - wheelT < 600) return; wheelT = performance.now(); go(cur + (e.deltaX > 0 ? 1 : -1), true); }, { passive: false });
+addEventListener('resize', () => place(-cur * track.clientWidth, false));
+addEventListener('keydown', (e) => { if (e.target.closest && e.target.closest('input')) return; if (e.key === 'ArrowRight') go(cur + 1, true); else if (e.key === 'ArrowLeft') go(cur - 1, true); else if (e.key === 'Escape') close(); });
+$('dots').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) go(+b.dataset.i, true); });
+track.addEventListener('click', (e) => { const b = e.target.closest('button[data-m]'); if (!b) return; lastTouch = Date.now();
+  post('/api/dash/media', { action: b.dataset.m }).then(() => setTimeout(pollMusic, 700)); });
+function close() { if (parent !== window) parent.postMessage('dash-close', '*'); }
+$('x').onclick = close;
+// pages qui défilent seules (réglable : bouton AUTO), sauf si on a touché l'écran il y a moins d'une minute
+let auto = false; try { auto = localStorage.getItem('dash_auto') === '1'; } catch (e) {}
+const setAuto = (v) => { auto = v; $('auto').classList.toggle('on', v); try { localStorage.setItem('dash_auto', v ? '1' : '0'); } catch (e) {} };
+$('auto').onclick = () => setAuto(!auto); setAuto(auto);
+setInterval(() => { if (auto && Date.now() - lastTouch > 60000 && !document.hidden) go(cur + 1); }, 25000);
+
+// données
+async function pollMain() { try { D = await get('/api/dashboard'); render(); } catch (e) {} }
+async function pollMeteo() { try { const m = await get('/api/dash/meteo'); if (m.ok) { M = m; render(); } } catch (e) {} }
+// curseur de volume de l'appli (page Musique) : envoyé au fil du glissement, pas de rafraîchissement pendant ce temps
+let volT = 0, volSend = 0;
+track.addEventListener('input', (e) => { const r = e.target; if (r.type !== 'range') return;
+  volT = Date.now(); lastTouch = Date.now(); r.style.setProperty('--v', r.value + '%'); r.parentNode.querySelector('span').textContent = r.value;
+  clearTimeout(volSend); volSend = setTimeout(() => post('/api/nowplaying', { action: (r.dataset.act || 'vol') + ':' + r.value }), 90); });
+track.addEventListener('click', (e) => { const b = e.target.closest('button[data-a]'); if (!b) return; lastTouch = Date.now();
+  b.parentNode.classList.toggle('muted'); post('/api/nowplaying', { action: b.dataset.a }).then(() => setTimeout(pollMusic, 600)); });
+async function pollMusic() { if (Date.now() - volT < 2500) return; try { const m = await get('/api/dash/musique'); MU = m; render('musique'); render('accueil'); } catch (e) {} }
+// page Jeu : stats du PC toutes les 2 s, seulement quand elle est affichée (rien ne tourne pour rien)
+async function pollJeu() { if (document.hidden || PAGES[cur][0] !== 'jeu') return; try { JG = await get('/api/jeu'); render('jeu'); } catch (e) {} }
+render(); pollMusic(); pollJeu();
+if (!HUD) { pollMain(); pollMeteo(); setInterval(pollMain, 20000); setInterval(pollMeteo, 600000); }
+setInterval(pollMusic, 3000); setInterval(clock, 1000); setInterval(pollJeu, 2000); pollDeck(true); setInterval(pollDeck, 2500);
+dots();
+</script></body></html>

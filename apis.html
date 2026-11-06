@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS · API</title>
+<style>
+  :root { --bg:#02060b; --panel:rgba(5,18,30,.88); --line:rgba(0,210,255,.22); --accent:0,210,255; --txt:#dcefff;
+    --muted:#7f9db3; --ok:#5be3a0; --warn:#ffb457; --bad:#ff7a7a; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  body { padding:18px 20px 40px; max-width:1100px; margin:0 auto; }
+  h1 { font:600 12px "Cascadia Mono", Consolas, monospace; letter-spacing:4px; color:rgb(var(--accent)); margin:0 0 4px; }
+  h2 { font:600 11px "Cascadia Mono", Consolas, monospace; letter-spacing:3px; color:var(--muted); margin:26px 0 10px;
+    display:flex; align-items:center; gap:10px; }
+  h2::after { content:""; flex:1; height:1px; background:var(--line); }
+  .lead { color:var(--muted); margin:0 0 6px; max-width:780px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:10px; }
+  .card { border:1px solid var(--line); background:var(--panel); padding:12px 14px; display:flex; flex-direction:column; gap:6px; }
+  .card.off { opacity:.55; }
+  .card b { font-size:15px; }
+  .card p { margin:0; color:var(--muted); font-size:13px; flex:1; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .chip { font:600 10px "Cascadia Mono", Consolas, monospace; letter-spacing:1.5px; padding:2px 7px; border:1px solid var(--line); color:var(--muted); }
+  .chip.ok { color:var(--ok); border-color:rgba(91,227,160,.4); } .chip.key { color:var(--warn); border-color:rgba(255,180,87,.45); }
+  .tool { font:12px "Cascadia Mono", Consolas, monospace; color:rgb(var(--accent)); opacity:.8; }
+  button, .btn { font:600 11px "Cascadia Mono", Consolas, monospace; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer;
+    color:var(--txt); background:rgba(0,210,255,.08); border:1px solid rgba(0,210,255,.45); padding:6px 11px; text-decoration:none; }
+  button:hover, .btn:hover { background:rgba(0,210,255,.2); }
+  button.bad { border-color:rgba(255,122,122,.5); color:var(--bad); background:rgba(255,80,80,.07); }
+  button.big { padding:9px 16px; font-size:12px; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .empty { color:var(--muted); border:1px dashed var(--line); padding:18px; text-align:center; }
+  /* éditeur */
+  #editor { display:none; border:1px solid rgba(0,210,255,.5); background:rgba(3,14,24,.97); padding:16px 18px; margin-top:14px;
+    box-shadow:0 0 30px rgba(0,210,255,.12); }
+  #editor.open { display:block; }
+  label { display:block; font:600 10px "Cascadia Mono", Consolas, monospace; letter-spacing:2px; color:var(--muted); margin:12px 0 4px; }
+  input, textarea, select { width:100%; background:#020a12; color:var(--txt); border:1px solid var(--line); padding:8px 10px;
+    font:14px "Segoe UI", system-ui, sans-serif; outline:none; }
+  input:focus, textarea:focus, select:focus { border-color:rgb(var(--accent)); }
+  textarea { min-height:58px; resize:vertical; }
+  .hint { color:var(--muted); font-size:12px; margin:3px 0 0; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; } @media (max-width:640px) { .two { grid-template-columns:1fr; } }
+  .prm { display:grid; grid-template-columns:130px 1fr 80px 1fr; gap:8px; align-items:center; margin-bottom:6px; }
+  .prm code { color:rgb(var(--accent)); font:13px "Cascadia Mono", Consolas, monospace; }
+  .prm small { color:var(--muted); }
+  @media (max-width:640px) { .prm { grid-template-columns:1fr 1fr; } }
+  pre { background:#010509; border:1px solid var(--line); padding:10px; margin:8px 0 0; max-height:260px; overflow:auto;
+    white-space:pre-wrap; word-break:break-word; font:12px "Cascadia Mono", Consolas, monospace; color:#bfe9ff; }
+  pre.err { color:var(--bad); border-color:rgba(255,122,122,.4); }
+  #toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:#06202f; border:1px solid rgb(var(--accent));
+    padding:10px 16px; display:none; z-index:9; max-width:90vw; } #toast.show { display:block; }
+  .note { border:1px solid rgba(255,180,87,.4); background:rgba(255,160,40,.07); padding:8px 12px; margin:10px 0 0; font-size:13px; }
+  a { color:rgb(var(--accent)); }
+</style>
+</head>
+<body>
+<h1>CONNECTEURS API</h1>
+<p class="lead">Ajoute des services gratuits (météo, promos de jeux, actu, football…). Chaque service devient un « outil » que
+  JARVIS utilise tout seul quand tu lui poses la question à voix haute. Une API ajoutée ici sert dès sa
+  <b>prochaine conversation</b> (dis « Jarvis, … »).</p>
+
+<h2>MES API</h2>
+<div id="mine" class="grid"></div>
+
+<div class="row" style="margin-top:14px"><button class="big" id="newBtn">+ API personnalisée</button>
+  <span class="hint">Tu as le lien d'une API ? Colle-le : JARVIS s'occupe du reste.</span></div>
+
+<div id="editor"></div>
+
+<h2>CATALOGUE : AJOUT EN UN CLIC</h2>
+<div id="catalog" class="grid"></div>
+
+<div id="toast"></div>
+<script>
+const TOKEN = "__JTOKEN__";
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+let APIS = [], PRESETS = [];
+
+function toast(t, ms = 4500) { const x = $('toast'); x.textContent = t; x.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => x.classList.remove('show'), ms); }
+async function post(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: TOKEN, ...body }) });
+  if (r.status === 403) throw new Error('Accès refusé : rouvre la page depuis JARVIS.');
+  return r.json();
+}
+async function refresh() {
+  const r = await fetch('/api/apis?token=' + encodeURIComponent(TOKEN));
+  if (r.status === 403) { $('mine').replaceChildren(el('div', { className: 'empty', textContent: 'Accès refusé : ouvre cette page depuis JARVIS.' })); return; }
+  const d = await r.json(); APIS = d.apis; PRESETS = d.presets; render();
+}
+
+function render() {
+  $('mine').replaceChildren(...(APIS.length ? APIS.map(mineCard) : [el('div', { className: 'empty', textContent: 'Aucune API pour l\'instant : choisis-en une dans le catalogue ci-dessous.' })]));
+  $('catalog').replaceChildren(...PRESETS.map(presetCard));
+}
+function mineCard(a) {
+  const c = el('div', { className: 'card' + (a.enabled === false ? ' off' : '') },
+    el('div', { className: 'row' }, el('b', { textContent: a.name }),
+      el('span', { className: 'chip ' + (a.enabled === false ? '' : 'ok'), textContent: a.enabled === false ? 'DÉSACTIVÉE' : 'ACTIVE' }),
+      a.has_secret ? el('span', { className: 'chip key', textContent: 'CLÉ ✓' }) : ''),
+    el('p', { textContent: a.description }), el('span', { className: 'tool', textContent: a.tool }));
+  const row = el('div', { className: 'row' },
+    el('button', { textContent: 'Tester', onclick: () => openEditor(a, true) }),
+    el('button', { textContent: 'Modifier', onclick: () => openEditor(a) }),
+    el('button', { textContent: a.enabled === false ? 'Activer' : 'Désactiver', onclick: async () => { await post('/api/apis/toggle', { id: a.id, on: a.enabled === false }); refresh(); } }),
+    el('button', { className: 'bad', textContent: 'Supprimer', onclick: async () => { if (confirm('Supprimer « ' + a.name + ' » ?')) { await post('/api/apis/delete', { id: a.id }); toast('Supprimée.'); refresh(); } } }));
+  c.append(row); return c;
+}
+function presetCard(p) {
+  const added = APIS.find(a => a.preset === p.id);
+  const c = el('div', { className: 'card' }, el('div', { className: 'row' }, el('b', { textContent: p.name }),
+    el('span', { className: 'chip ' + (p.needs_key ? 'key' : 'ok'), textContent: p.needs_key ? 'CLÉ GRATUITE' : 'SANS CLÉ' }),
+    el('span', { className: 'chip', textContent: p.tag.toUpperCase() })), el('p', { textContent: p.description }));
+  const direct = !p.needs_key && !p.note;
+  c.append(el('div', { className: 'row' }, added ? el('span', { className: 'chip ok', textContent: 'AJOUTÉE ✓' }) : '',
+    el('button', { textContent: added ? 'Voir' : direct ? 'Ajouter' : 'Configurer', onclick: async () => {
+      if (added) { openEditor(added); return; }
+      const draft = presetDraft(p);
+      if (!direct) { openEditor(draft); return; }
+      delete draft._preset;
+      const r = await post('/api/apis', { api: draft, secret: '' });
+      if (!r.ok) { toast(r.error); return; }
+      toast('« ' + p.name + ' » ajoutée. Dis « Jarvis, … » pour l\'essayer.'); await refresh();
+    } })));
+  return c;
+}
+function presetDraft(p) {
+  return { id: '', preset: p.id, name: p.name, description: p.description, url: p.url, params: (p.params || []).map(x => ({ ...x })), auth: p.auth || { type: 'none' },
+    extract: p.extract || '', enabled: true, _preset: p };
+}
+
+// ------------------------------------------------------------------ éditeur
+let cur = null;
+const PH = /\{([a-z_][a-z0-9_]*)\}/g;
+function urlParams(url) { return [...new Set([...url.matchAll(PH)].map(m => m[1]))].filter(n => n !== 'cle'); }
+
+function openEditor(a, runTest = false) {
+  cur = a ? structuredClone(a) : { id: '', name: '', description: '', url: '', params: [], auth: { type: 'none' }, extract: '', enabled: true };
+  const p = cur._preset; delete cur._preset;
+  const ed = $('editor'); ed.classList.add('open');
+  const f = {
+    name: el('input', { value: cur.name, placeholder: 'ex. Promos de jeux' }),
+    desc: el('textarea', { value: cur.description, placeholder: 'ex. Donne les promos actuelles d\'un jeu PC. (JARVIS lit cette phrase pour savoir quand utiliser l\'API.)' }),
+    url: el('input', { value: cur.url, placeholder: 'https://exemple.com/api?recherche={sujet}', spellcheck: false }),
+    atype: el('select', {}, ...[['none', 'Aucune clé'], ['header', 'Clé dans un en-tête (ex. X-Auth-Token, Authorization)'], ['query', 'Clé comme paramètre du lien (ex. api_key=…)']]
+      .map(([v, t]) => el('option', { value: v, textContent: t }))),
+    aname: el('input', { value: cur.auth.name || '', placeholder: 'ex. X-Auth-Token' }),
+    aprefix: el('input', { value: cur.auth.prefix || '', placeholder: 'ex. Bearer  (avec l\'espace, sinon vide)' }),
+    secret: el('input', { type: 'password', autocomplete: 'off', placeholder: cur.has_secret ? 'Clé déjà enregistrée ✓ : laisse vide pour la garder' : 'Colle ta clé ici' }),
+    extract: el('input', { value: cur.extract || '', placeholder: 'ex. title, price  (vide = toute la réponse, raccourcie)' }),
+  };
+  f.atype.value = cur.auth.type || 'none';
+  const prm = el('div'), keyBox = el('div'), out = el('div');
+  function drawParams() {
+    const names = urlParams(f.url.value), old = Object.fromEntries((cur.params || []).map(x => [x.name, x]));
+    cur.params = names.map(n => old[n] || { name: n, description: '', required: true, default: '' });
+    prm.replaceChildren(...(cur.params.length ? cur.params.map(x => el('div', { className: 'prm' },
+      el('code', { textContent: '{' + x.name + '}' }),
+      el('input', { value: x.description, placeholder: 'ce que c\'est (ex. nom du jeu)', oninput: (e) => x.description = e.target.value }),
+      el('label', { style: 'margin:0;display:flex;gap:5px;align-items:center' }, el('input', { type: 'checkbox', checked: x.required, style: 'width:auto', onchange: (e) => x.required = e.target.checked }), 'requis'),
+      el('input', { value: x.default, placeholder: 'valeur par défaut', oninput: (e) => x.default = e.target.value })))
+      : [el('p', { className: 'hint', textContent: 'Aucun paramètre : écris {nom} dans le lien là où la valeur doit changer (ex. ?q={sujet}).' })]));
+  }
+  function drawKey() {
+    const t = f.atype.value, usesPh = f.url.value.includes('{cle}');
+    keyBox.replaceChildren(
+      ...(t !== 'none' ? [el('label', { textContent: t === 'header' ? 'NOM DE L\'EN-TÊTE' : 'NOM DU PARAMÈTRE' }), f.aname] : []),
+      ...(t === 'header' ? [el('label', { textContent: 'DEVANT LA CLÉ (FACULTATIF)' }), f.aprefix] : []),
+      ...(t !== 'none' || usesPh ? [el('label', { textContent: 'TA CLÉ API' }), f.secret,
+        el('p', { className: 'hint', textContent: 'Chiffrée par Windows pour ton compte : jamais affichée de nouveau, jamais donnée à l\'IA.' })] : []));
+  }
+  f.url.oninput = () => { drawParams(); drawKey(); }; f.atype.onchange = drawKey;
+  drawParams(); drawKey();
+
+  const collect = () => ({ id: cur.id, preset: cur.preset || '', name: f.name.value, description: f.desc.value, url: f.url.value.trim(),
+    params: cur.params, auth: f.atype.value === 'none' ? { type: 'none' } : { type: f.atype.value, name: f.aname.value.trim(), prefix: f.aprefix.value },
+    extract: f.extract.value, enabled: cur.enabled !== false });
+  const values = {};
+  const testBox = el('div');
+  function drawTest() {
+    testBox.replaceChildren(el('label', { textContent: 'ESSAI RÉEL (CE QUE JARVIS RECEVRAIT)' }),
+      ...cur.params.map(x => el('div', { className: 'prm' }, el('code', { textContent: x.name }),
+        el('input', { value: values[x.name] ?? (x.default || x.example || ''), placeholder: 'valeur d\'essai', oninput: (e) => values[x.name] = e.target.value }), '', '')),
+      el('button', { textContent: 'Lancer l\'essai', onclick: async (e) => {
+        e.target.disabled = true; out.replaceChildren(el('pre', { textContent: 'Appel en cours…' }));
+        try {
+          const vals = Object.fromEntries(cur.params.map(x => [x.name, values[x.name] ?? (x.default || x.example || '')]));
+          const r = await post('/api/apis/test', { api: collect(), secret: f.secret.value, values: vals });
+          out.replaceChildren(el('pre', { className: r.ok ? '' : 'err', textContent: r.ok ? r.text : r.error }));
+        } catch (err) { out.replaceChildren(el('pre', { className: 'err', textContent: String(err.message || err) })); }
+        e.target.disabled = false;
+      } }), out);
+  }
+  f.url.addEventListener('input', drawTest); drawTest();
+
+  const note = p && p.note ? el('div', { className: 'note', textContent: p.note }) : '';
+  const keyLink = p && p.needs_key ? el('div', { className: 'note' }, 'Cette API demande une clé gratuite : ',
+    el('a', { href: p.key_url, target: '_blank', rel: 'noopener', textContent: 'la créer sur ' + new URL(p.key_url).hostname }),
+    p.key_hint ? ' (' + p.key_hint + ')' : '', '. Colle-la ensuite plus bas.') : '';
+  ed.replaceChildren(
+    el('div', { className: 'row' }, el('b', { textContent: cur.id ? 'Modifier : ' + cur.name : 'Nouvelle API' }),
+      el('button', { style: 'margin-left:auto', textContent: 'Fermer', onclick: () => ed.classList.remove('open') })),
+    note, keyLink,
+    el('label', { textContent: 'NOM' }), f.name,
+    el('label', { textContent: 'À QUOI ÇA SERT (JARVIS LIT CETTE PHRASE)' }), f.desc,
+    el('label', { textContent: 'LIEN (GET) AVEC {PARAMÈTRES}' }), f.url,
+    el('p', { className: 'hint', textContent: 'Seules les adresses publiques sont autorisées (jamais ton réseau local ni JARVIS lui-même).' }),
+    el('label', { textContent: 'PARAMÈTRES (DÉTECTÉS DANS LE LIEN)' }), prm,
+    el('label', { textContent: 'CLÉ API' }), f.atype, keyBox,
+    el('label', { textContent: 'CHAMPS À GARDER (FACULTATIF)' }), f.extract,
+    el('p', { className: 'hint', textContent: 'Noms séparés par des virgules : JARVIS ne reçoit que ceux-là (plus court, plus rapide).' }),
+    testBox,
+    el('div', { className: 'row', style: 'margin-top:16px' },
+      el('button', { className: 'big', textContent: 'Enregistrer', onclick: async () => {
+        const r = await post('/api/apis', { api: collect(), secret: f.secret.value });
+        if (!r.ok) { toast(r.error, 7000); return; }
+        toast('Enregistrée. JARVIS l\'utilisera dès sa prochaine conversation.'); ed.classList.remove('open'); refresh();
+      } }),
+      el('button', { textContent: 'Annuler', onclick: () => ed.classList.remove('open') })));
+  ed.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (runTest) setTimeout(() => testBox.querySelector('button').click(), 300);
+}
+$('newBtn').onclick = () => openEditor(null);
+refresh();
+</script>
+</body>
+</html>

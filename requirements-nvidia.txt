@@ -1,0 +1,3 @@
+# Whisper sur une carte graphique NVIDIA (installé seulement si le PC en a une : ~1 Go)
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.27.0.42

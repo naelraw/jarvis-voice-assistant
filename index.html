@@ -1,0 +1,2692 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS</title>
+<link rel="icon" href="/favicon.png">
+<style>
+  :root {
+    --bg: #02060c;
+    --accent: 0, 210, 255;
+    --text: #d6ecf5;
+    --muted: #7d98a8;
+    --card: rgba(8, 22, 34, 0.78);
+    --line: rgba(0, 210, 255, 0.22);
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden;
+    font-family: "Segoe UI", system-ui, sans-serif; color: var(--text); }
+  body::before { /* léger quadrillage façon HUD */
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .5;
+    background-image: linear-gradient(rgba(0,210,255,.035) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(0,210,255,.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
+  }
+  #c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }  /* la sphère (pas le globe 3D) */
+
+  /* ---------------- petites fenêtres flottantes autour de la sphère */
+  #cards { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
+  .card { position: absolute; pointer-events: auto; max-height: 62vh; display: flex; flex-direction: column;
+    background: linear-gradient(180deg, rgba(4,18,30,.9), rgba(2,10,18,.86)); border: 1px solid rgba(0,210,255,.16);
+    box-shadow: 0 0 40px rgba(0,120,200,.08) inset, 0 12px 40px rgba(0,0,0,.45); backdrop-filter: blur(10px);
+    opacity: 0; clip-path: inset(0 0 100% 0); transition: opacity .25s, clip-path .3s ease; }
+  .card.shown { opacity: 1; clip-path: inset(-20px -20px -20px -20px); }
+  .card.closing { opacity: 0; clip-path: inset(0 0 100% 0); }
+  .chead { display: flex; align-items: center; gap: 10px; padding: 9px 10px 8px 16px; cursor: grab;
+    border-bottom: 1px solid rgba(0,210,255,.16); user-select: none; touch-action: none;
+    background: linear-gradient(90deg, rgba(var(--accent), .12), transparent 70%); }
+  .chead:active { cursor: grabbing; }
+  .chead::before { content: ""; width: 6px; height: 6px; background: rgb(var(--accent)); box-shadow: 0 0 8px rgb(var(--accent)); }
+  .ctitle { flex: 1; color: #fff; font: 600 13px "Bahnschrift", "Segoe UI", sans-serif; letter-spacing: 3px; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 10px rgba(0,210,255,.45); }
+  .cx { width: 28px; height: 24px; border: 1px solid rgba(0,210,255,.2); background: transparent;
+    color: rgba(var(--accent), .8); cursor: pointer; font-size: 12px; }
+  .cx:hover { color: #ffb0b0; border-color: rgba(255,110,110,.8); box-shadow: 0 0 10px rgba(255,80,80,.35); }
+  .cbody { padding: 12px 16px 16px; overflow-y: auto; font-size: 15px; line-height: 1.55; }
+  .cbody::-webkit-scrollbar { width: 6px; }
+  .cbody::-webkit-scrollbar-thumb { background: rgba(0,210,255,.3); }
+  .mdc > :first-child { margin-top: 2px; }
+  .mdc h1, .mdc h2, .mdc h3, .mdc h4 { color: #fff; margin: 1.1em 0 .45em; line-height: 1.3; }
+  .mdc h2 { font-size: 17px; font-weight: 600; }
+  .mdc h3, .mdc h4 { font-size: 12.5px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase;
+    color: rgb(var(--accent)); padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+  .mdc p { margin: .5em 0; color: #cfe3ec; }
+  .mdc ul, .mdc ol { padding-left: 1.2em; margin: .45em 0; }
+  .mdc li { margin: .38em 0; padding-left: 2px; color: #cfe3ec; }
+  .mdc li::marker { color: rgb(var(--accent)); }
+  .mdc strong { color: #fff; font-weight: 600; }
+  .mdc p.foot { color: var(--muted); font-size: 13px; margin-top: .9em; }
+  .chart { width: 100%; height: auto; margin: 6px 0 4px; overflow: visible; }
+  .chart rect { fill: rgba(var(--accent), .75); }
+  .chart .cv { fill: #fff; font-size: 10px; text-anchor: middle; }
+  .chart .cl { fill: var(--muted); font-size: 9.5px; text-anchor: middle; }
+  /* panneau de tâche : accent orange comme la sphère */
+  .card.task { --accent: 255, 160, 40; --line: rgba(255,160,40,.28);
+    box-shadow: 0 12px 40px rgba(0,0,0,.45), 0 0 30px rgba(255,160,40,.12); }
+  .card.task .chead::before { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .mdc a { color: rgb(var(--accent)); text-decoration: none; }
+  .mdc a:hover { text-decoration: underline; }
+  .mdc code { background: rgba(0,210,255,.1); padding: 2px 6px; border-radius: 6px;
+    font-family: Consolas, monospace; font-size: .9em; }
+  .mdc pre { background: rgba(0,0,0,.4); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 18px; overflow-x: auto; }
+  .mdc pre code { background: none; padding: 0; }
+  .mdc table { border-collapse: collapse; margin: .8em 0; width: 100%; }
+  .mdc th, .mdc td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; }
+  .mdc th { background: rgba(0,210,255,.08); color: #fff; }
+  .mdc hr { border: none; border-top: 1px solid var(--line); margin: 1.2em 0; }
+  .mdc blockquote { margin: .6em 0; padding: .2em 1em; border-left: 3px solid rgb(var(--accent));
+    color: var(--muted); }
+  .cursor { display: inline-block; width: 9px; height: 1.1em; margin-left: 3px; vertical-align: -3px;
+    background: rgb(var(--accent)); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+
+  /* ================= HUD façon JARVIS (Iron Man) : cadres fins, équerres aux coins, majuscules espacées ======= */
+  :root { --hud: "Bahnschrift", "Segoe UI", sans-serif; --mono: "Cascadia Mono", "Consolas", monospace;
+    --glow: 0 0 10px rgba(0,210,255,.55); --frame: rgba(0,210,255,.16); }
+  /* équerres lumineuses aux 4 coins d'un cadre (.hudbox) */
+  .hudbox { position: relative; }
+  .card.hudbox { position: absolute; }  /* les petites fenêtres restent libres (sinon elles s'empilent et sautent) */
+  .hudbox::before, .hudbox::after { content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none;
+    border: 0 solid rgb(var(--accent)); filter: drop-shadow(0 0 4px rgba(var(--accent), .8)); }
+  .hudbox::before { top: -1px; left: -1px; border-top-width: 2px; border-left-width: 2px; }
+  .hudbox::after { bottom: -1px; right: -1px; border-bottom-width: 2px; border-right-width: 2px; }
+  .hudbox > .cn1, .hudbox > .cn2 { position: absolute; width: 14px; height: 14px; pointer-events: none;
+    border: 0 solid rgba(var(--accent), .55); }
+  .hudbox > .cn1 { top: -1px; right: -1px; border-top-width: 1px; border-right-width: 1px; }
+  .hudbox > .cn2 { bottom: -1px; left: -1px; border-bottom-width: 1px; border-left-width: 1px; }
+  /* trait gradué (règle) */
+  .ticks { height: 6px; background: repeating-linear-gradient(90deg, rgba(var(--accent), .45) 0 1px, transparent 1px 8px);
+    mask-image: linear-gradient(90deg, #000, transparent); opacity: .7; }
+
+  /* cadre de l'écran + lignes de balayage */
+  #frame { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+  #frame i { position: absolute; width: 46px; height: 46px; border: 0 solid rgba(0,210,255,.45); }
+  #frame i:nth-child(1) { top: 6px; left: 6px; border-top-width: 1px; border-left-width: 1px; }
+  #frame i:nth-child(2) { top: 6px; right: 6px; border-top-width: 1px; border-right-width: 1px; }
+  #frame i:nth-child(3) { bottom: 6px; left: 6px; border-bottom-width: 1px; border-left-width: 1px; }
+  #frame i:nth-child(4) { bottom: 6px; right: 6px; border-bottom-width: 1px; border-right-width: 1px; }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9; opacity: .22;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 1px, transparent 1px 3px); }
+
+  /* bandeau d'état en bas (au centre de la zone de la sphère) */
+  #hudbar { position: fixed; bottom: 14px; left: calc(var(--sidew) + 40px); right: 70px; z-index: 2; pointer-events: none;
+    display: flex; align-items: center; justify-content: center; gap: 18px; font: 11px var(--mono); letter-spacing: 2px;
+    color: rgba(var(--accent), .75); text-transform: uppercase; white-space: nowrap; overflow: hidden; transition: left .2s ease; }
+  #hudbar b { color: #e8f6ff; font-weight: 400; }
+  #hudbar .dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; background: #3df0a0; vertical-align: 1px;
+    box-shadow: 0 0 6px #3df0a0; }
+  #hudbar .dot.off { background: #ffb36b; box-shadow: 0 0 6px #ffb36b; }
+  @media (max-width: 1500px) { #hudbar .opt { display: none; } #hudbar { gap: 12px; letter-spacing: 1.5px; } }
+  #page .chart { max-height: 260px; max-width: 820px; display: block; }
+  #page .chart .cv, #page .chart .cl { font-family: "Cascadia Mono", Consolas, monospace; }
+  #hudbar .sep { width: 40px; height: 1px; background: linear-gradient(90deg, transparent, rgba(var(--accent), .6), transparent); }
+
+  /* zone pour déplacer la petite fenêtre (fenêtre sans cadre) ; double-clic = plein écran / petite */
+  #drag { position: fixed; top: 0; left: calc(var(--sidew) + 28px); right: 170px; height: 44px; z-index: 3; }
+
+  /* ---------------- panneau de gauche : onglets (agenda, rappels, notes, PC Radar, mails), réductible */
+  :root { --sidew: 244px; }
+  body.collapsed { --sidew: 62px; }
+  #side { position: fixed; left: 16px; top: 16px; bottom: 16px; width: var(--sidew); z-index: 5; display: flex;
+    flex-direction: column; gap: 2px; padding: 12px 8px 10px; box-sizing: border-box;
+    background: linear-gradient(180deg, rgba(4,18,30,.86), rgba(2,10,18,.78)); border: 1px solid var(--frame);
+    backdrop-filter: blur(10px); box-shadow: 0 0 40px rgba(0,120,200,.08) inset, 0 10px 30px rgba(0,0,0,.4);
+    transition: width .2s ease; }
+  #side .scroll { display: flex; flex-direction: column; gap: 2px; overflow: hidden; flex: 1; min-height: 0; }
+  .sic { flex: none; width: 28px; height: 28px; display: grid; place-items: center; color: rgb(var(--accent)); }
+  .sic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round;
+    stroke-linejoin: round; filter: drop-shadow(0 0 3px rgba(0,210,255,.6)); }
+  .sbrand { display: flex; align-items: center; gap: 10px; padding: 2px 6px 8px; white-space: nowrap; overflow: hidden; }
+  .sbrand .lg { font: 600 15px var(--hud); letter-spacing: 4px; color: #fff; text-shadow: var(--glow); }
+  .sbrand .lg small { display: block; font: 9.5px var(--mono); letter-spacing: 2.5px; color: rgba(var(--accent), .7);
+    text-shadow: none; margin-top: 2px; }
+  .stog { margin-left: auto; flex: none; width: 28px; height: 28px; display: grid; place-items: center; padding: 0;
+    border: 1px solid var(--frame); background: rgba(0,210,255,.04); color: var(--muted); cursor: pointer; }
+  .stog .sic { width: 26px; height: 26px; color: inherit; transition: transform .2s; }
+  .stog:hover { color: #fff; border-color: rgba(0,210,255,.7); box-shadow: var(--glow); }
+  body.collapsed .stog .sic { transform: scaleX(-1); }
+  body.collapsed .sbrand { padding: 2px 0 8px; justify-content: center; }
+  body.collapsed .sbrand .lg { display: none; }
+  body.collapsed .stog { margin: 0; }
+  .ssec { font: 10px var(--mono); letter-spacing: 3px; color: rgba(var(--accent), .6); padding: 8px 8px 4px;
+    display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .ssec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--frame), transparent); }
+  body.collapsed .ssec { font-size: 0; padding: 6px 4px; }
+  .tab { position: relative; display: flex; align-items: center; gap: 10px; padding: 7px 8px; cursor: pointer;
+    color: #cfe3ec; white-space: nowrap; user-select: none; border-left: 2px solid transparent; transition: background .15s; }
+  .tab .idx { position: absolute; right: 8px; top: 6px; font: 9.5px var(--mono); color: rgba(var(--accent), .4); letter-spacing: 1px; }
+  .tab:hover { background: linear-gradient(90deg, rgba(0,210,255,.10), transparent 85%); }
+  .tab.on { background: linear-gradient(90deg, rgba(0,210,255,.20), rgba(0,210,255,.02) 90%); border-left-color: rgb(var(--accent));
+    color: #fff; box-shadow: inset 8px 0 14px -10px rgba(0,210,255,.9); }
+  .tab .tx { min-width: 0; flex: 1; overflow: hidden; }
+  .tab .tx b { display: block; font: 600 13px var(--hud); letter-spacing: 2.4px; text-transform: uppercase; }
+  .tab .tx small { display: block; color: var(--muted); font: 12.5px var(--hud); letter-spacing: .3px; overflow: hidden;
+    text-overflow: ellipsis; margin-top: 2px; }
+  .badge { flex: none; min-width: 20px; height: 18px; padding: 0 5px; box-sizing: border-box; border: 1px solid rgb(var(--accent));
+    color: #fff; background: rgba(0,210,255,.16); font: 600 10.5px var(--mono); display: grid; place-items: center;
+    box-shadow: 0 0 8px rgba(0,210,255,.35); margin-top: 10px; }
+  .badge.warn { border-color: #ffa040; background: rgba(255,150,40,.18); box-shadow: 0 0 8px rgba(255,150,40,.4); }
+  body.collapsed .badge { position: absolute; left: 24px; top: -2px; min-width: 18px; height: 16px; font-size: 9.5px;
+    margin: 0; background: #06202e; }
+  body.collapsed .badge.warn { background: #2a1606; }
+  body.collapsed .tab .idx { display: none; }
+  .squiet { display: flex; gap: 10px; align-items: center; padding: 8px; color: #ffb36b; font: 11.5px var(--mono);
+    letter-spacing: .5px; line-height: 1.4; border: 1px solid rgba(255,160,60,.25); background: rgba(255,140,40,.06); }
+  .squiet .sic { color: #ffb36b; }
+  .squiet .sic svg { filter: drop-shadow(0 0 3px rgba(255,160,60,.7)); }
+  body.collapsed .squiet { padding: 6px 0; justify-content: center; border: none; background: none; }
+  .supd { color: rgba(var(--accent), .55); font: 10px var(--mono); letter-spacing: 2px; padding: 8px 8px 0;
+    white-space: nowrap; text-transform: uppercase; }
+  body.collapsed .tab .tx, body.collapsed .squiet .lb, body.collapsed .supd { display: none; }
+  body.hasside #clock { left: calc(50% + (var(--sidew) + 16px) / 2); transition: left .2s ease; }
+
+  /* ---------------- page ouverte par un onglet */
+  #page { position: fixed; top: 64px; bottom: 44px; left: calc(var(--sidew) + 32px); right: 16px; z-index: 4;
+    display: none; flex-direction: column; background: linear-gradient(180deg, rgba(3,14,24,.94), rgba(2,8,15,.94));
+    border: 1px solid var(--frame); backdrop-filter: blur(12px); box-shadow: 0 0 60px rgba(0,120,200,.10) inset,
+    0 14px 40px rgba(0,0,0,.5); transition: left .2s ease; }
+  #page.open { display: flex; animation: pin .22s ease; }
+  @keyframes pin { from { opacity: 0; clip-path: inset(0 0 100% 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+  .phead { display: flex; align-items: flex-end; gap: 14px; padding: 14px 14px 10px 22px; }
+  .phead .code { font: 10.5px var(--mono); letter-spacing: 3px; color: rgba(var(--accent), .7); margin-bottom: 4px; }
+  .phead h2 { margin: 0; font: 300 26px var(--hud); letter-spacing: 8px; color: #fff; text-transform: uppercase;
+    text-shadow: var(--glow); line-height: 1; }
+  .phead .sub { flex: 1; color: var(--muted); font: 12px var(--mono); padding-bottom: 2px; }
+  .phead .cx { align-self: flex-start; }
+  #page .ticks { margin: 0 22px; }
+  .pbody { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 22px 22px; font-size: 15px; line-height: 1.5; }
+  .pbody::-webkit-scrollbar, .nlist::-webkit-scrollbar, .nview::-webkit-scrollbar { width: 6px; }
+  .pbody::-webkit-scrollbar-thumb, .nlist::-webkit-scrollbar-thumb, .nview::-webkit-scrollbar-thumb { background: rgba(0,210,255,.3); }
+  .si { display: flex; gap: 16px; padding: 9px 10px; border-bottom: 1px dashed rgba(0,210,255,.12); }
+  .si:last-child { border-bottom: none; }
+  .si .w { flex: none; min-width: 64px; color: rgb(var(--accent)); font: 13px var(--mono); padding-top: 2px; text-shadow: 0 0 6px rgba(0,210,255,.4); }
+  .si .x { flex: 1; min-width: 0; color: #dcecf3; overflow-wrap: anywhere; }
+  .si .x small { display: block; color: var(--muted); font-size: 13px; margin-top: 1px; }
+  .si.past { opacity: .4; }
+  .sday { display: flex; align-items: center; gap: 10px; color: rgb(var(--accent)); font: 600 11.5px var(--hud);
+    letter-spacing: 3px; text-transform: uppercase; margin: 18px 0 4px; }
+  .sday::before { content: ""; width: 6px; height: 6px; background: rgb(var(--accent)); box-shadow: var(--glow); }
+  .sday::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(0,210,255,.4), transparent); }
+  .sday:first-child { margin-top: 4px; }
+  .sempty { color: var(--muted); padding: 10px 0; font: 13px var(--mono); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 4px 0 20px; }
+  .kpi { background: rgba(0,210,255,.035); border: 1px solid var(--frame); padding: 12px 14px 10px; }
+  .kpi b { display: block; color: #fff; font: 300 34px var(--hud); letter-spacing: 1px; text-shadow: var(--glow); line-height: 1.1; }
+  .kpi span { color: var(--muted); font: 11px var(--mono); letter-spacing: 1px; text-transform: uppercase; }
+  .kpi.warn b { color: #ffb36b; text-shadow: 0 0 10px rgba(255,150,40,.55); }
+  .ncols { display: flex; gap: 18px; height: 100%; min-height: 0; }
+  .nlist { flex: 0 0 clamp(170px, 34%, 300px); overflow-y: auto; padding-right: 6px; }
+  .nlist .si { cursor: pointer; padding: 9px 10px; flex-direction: column; gap: 2px; border-left: 2px solid transparent; }
+  .nlist .si .w { min-width: 0; font-size: 11.5px; }
+  .nlist .si:hover { background: linear-gradient(90deg, rgba(0,210,255,.08), transparent); }
+  .nlist .si.on { background: linear-gradient(90deg, rgba(0,210,255,.16), transparent); border-left-color: rgb(var(--accent)); }
+  .nview { flex: 1; min-width: 0; overflow-y: auto; border-left: 1px solid var(--frame); padding-left: 20px; }
+  #page .pbody.split { overflow: hidden; }
+
+  /* ---------------- boutons du bas : clavier, micro, éteindre */
+  #controls { position: fixed; bottom: 40px; left: calc(var(--sidew) + 40px); right: 70px; z-index: 6;
+    display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; transition: left .2s ease; }
+  #controls .row2 { display: flex; gap: 10px; pointer-events: auto; }
+  .cbtn { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; cursor: pointer;
+    border: 1px solid rgba(0,210,255,.25); background: rgba(3,14,24,.82); color: rgba(var(--accent), .9);
+    font: 600 10.5px "Cascadia Mono", Consolas, monospace; letter-spacing: 2px; text-transform: uppercase;
+    backdrop-filter: blur(8px); transition: all .15s; }
+  .cbtn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .cbtn:hover { color: #fff; border-color: rgba(0,210,255,.8); box-shadow: 0 0 12px rgba(0,210,255,.45); }
+  .cbtn.on { color: #fff; border-color: rgb(var(--accent)); background: rgba(0,210,255,.16); }
+  .cbtn.listen { color: #ffd29a; border-color: rgba(255,190,110,.8); background: rgba(255,160,40,.13); box-shadow: 0 0 12px rgba(255,160,40,.3); }
+  .cbtn.muted { color: #ff8a8a; border-color: rgba(255,90,90,.7); background: rgba(255,60,60,.12); box-shadow: 0 0 12px rgba(255,60,60,.3); }
+  #askbox { display: none; pointer-events: auto; width: min(560px, 100%); }
+  #askbox.open { display: flex; animation: msgin .2s ease; }
+  #askbox input { flex: 1; height: 40px; padding: 0 14px; border: 1px solid rgb(var(--accent)); background: rgba(2,10,18,.94);
+    color: #fff; font: 15px "Segoe UI", sans-serif; outline: none; box-shadow: 0 0 16px rgba(0,210,255,.25); }
+  #askbox input::placeholder { color: var(--muted); }
+  #askbox button { width: 44px; border: 1px solid rgb(var(--accent)); border-left: none; background: rgba(0,210,255,.16);
+    color: #fff; cursor: pointer; font-size: 16px; }
+  #hudbar { bottom: 10px; }
+
+  /* ---------------- conversation sous la sphère (sa phrase puis la réponse), petit texte, sans boîte */
+  #chat { position: fixed; left: calc(var(--sidew) + 40px); right: 40px; top: calc(50% + 27vmin); z-index: 3;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; text-align: center;
+    transition: left .2s ease; }
+  .msg { max-width: min(760px, 100%); display: flex; gap: 8px; align-items: baseline; justify-content: center;
+    animation: msgin .3s ease; transition: opacity .8s ease; overflow-wrap: anywhere;
+    text-shadow: 0 0 2px #000, 0 1px 8px rgba(0,0,0,.95); }
+  .msg .who { flex: none; font: 600 9.5px "Cascadia Mono", Consolas, monospace; letter-spacing: 2.5px; }
+  .msg .tx { font-size: 14px; line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3; overflow: hidden; }
+  .msg.user .who { color: #e0a85a; }
+  .msg.user .tx { color: #ffd29a; font-style: italic; }
+  .msg.jarvis .who { color: rgba(var(--accent), .9); }
+  .msg.jarvis .tx { color: #9fe8ff; }
+  .msg.live .tx::after { content: "▍"; color: rgb(var(--accent)); animation: blink 1s steps(2) infinite; margin-left: 4px; }
+  .msg.gone { opacity: 0; }
+  @keyframes msgin { from { opacity: 0; transform: translateY(10px); } }
+
+  /* ---------------- globe 3D (CesiumJS, chargé au premier usage) */
+  #globe { position: fixed; top: 64px; bottom: 44px; left: calc(var(--sidew) + 32px); right: 16px; z-index: 4;
+    display: none; flex-direction: column; border: 1px solid var(--frame); background: #01060c;
+    box-shadow: 0 14px 40px rgba(0,0,0,.5); transition: left .2s ease; }
+  #globe.open { display: flex; animation: pin .22s ease; }
+  #globeView { flex: 1; min-height: 0; position: relative; }
+  #globeView .cesium-widget-credits { font-size: 9px; opacity: .5; }
+  #globeInfo { position: absolute; left: 14px; bottom: 14px; z-index: 2; padding: 8px 12px; pointer-events: none;
+    border: 1px solid rgba(0,210,255,.3); background: rgba(3,14,24,.85); color: #e8f6ff; font: 13px "Cascadia Mono", Consolas, monospace;
+    letter-spacing: .5px; display: none; }
+  #globe::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3;
+    box-shadow: inset 0 0 120px rgba(0,30,60,.65); }
+
+  /* ---------------- minuteurs (en haut à droite, sous les boutons de fenêtre) */
+  #timers { position: fixed; right: 16px; top: 58px; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+  .timer { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; border: 1px solid rgba(0,210,255,.22);
+    background: rgba(3,14,24,.88); backdrop-filter: blur(8px); }
+  .timer svg { width: 46px; height: 46px; transform: rotate(-90deg); }
+  .timer circle { fill: none; stroke-width: 3; }
+  .timer .bg { stroke: rgba(0,210,255,.15); } .timer .fg { stroke: rgb(var(--accent)); filter: drop-shadow(0 0 4px rgb(var(--accent))); }
+  .timer .t { font: 300 22px "Bahnschrift", sans-serif; color: #fff; letter-spacing: 1px; min-width: 70px; }
+  .timer .l { font: 10.5px "Cascadia Mono", Consolas, monospace; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .timer.done { border-color: #ffa040; animation: ring .5s ease-in-out infinite alternate; }
+  .timer.done .fg { stroke: #ffa040; }
+  @keyframes ring { to { box-shadow: 0 0 22px rgba(255,150,40,.55); } }
+  .timer .cx { margin-left: 4px; }
+
+  /* ---------------- horloge (interface Stark) */
+  #clock { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;
+    text-align: center; font-family: var(--hud); color: #e8f6ff; }
+  #clock .hm { font-size: 44px; font-weight: 300; letter-spacing: 8px; line-height: 1;
+    text-shadow: 0 0 18px rgba(0,210,255,.5); }
+  #clock .s { font: 16px var(--mono); margin-left: 6px; color: rgb(var(--accent)); letter-spacing: 1px; vertical-align: top; }
+  /* écran d'accueil de la tablette : météo, prochain rendez-vous, PC Radar sous l'horloge, quand rien n'est ouvert */
+  #ambient { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;
+    text-align: center; font: 12.5px/1.9 var(--mono); letter-spacing: 2px; color: rgba(var(--accent), .8);
+    opacity: 0; transition: opacity .8s; white-space: nowrap; }
+  body.hasside #ambient { left: calc(50% + (var(--sidew) + 16px) / 2); transition: opacity .8s, left .2s ease; }
+  #ambient.on { opacity: 1; } #ambient b { color: #e8f6ff; font-weight: 400; }
+  #ambient { display: none !important; }   /* météo / agenda / PC Radar sous l'heure : retirés (demande du 2026-10-22) */
+  body.night::after { content: ""; position: fixed; inset: 0; background: rgba(0,0,0,.4); pointer-events: none; z-index: 60; }
+  @media (max-width: 1100px), (max-height: 700px) { #ambient { top: 62px; font-size: 11px; line-height: 1.7; letter-spacing: 1px; } }
+  #clock .d { margin-top: 7px; font: 10.5px var(--mono); letter-spacing: 5px; color: rgba(var(--accent), .85); }
+  #clock::before, #clock::after { content: ""; position: absolute; top: 22px; width: 140px; height: 7px;
+    background: repeating-linear-gradient(90deg, rgba(var(--accent), .5) 0 1px, transparent 1px 7px);
+    mask-image: linear-gradient(90deg, transparent, #000); border-bottom: 1px solid rgba(var(--accent), .35); }
+  #clock::before { right: calc(100% + 18px); }
+  #clock::after { left: calc(100% + 18px); transform: scaleX(-1); }
+
+  /* ---------------- boutons de fenêtre (ceux de JARVIS : il n'y a plus ceux de Windows) */
+  #winbar { position: fixed; top: 16px; right: 16px; z-index: 12; display: flex; gap: 6px; }
+  #winbar button { width: 38px; height: 28px; border: 1px solid var(--frame); background: rgba(4,16,26,.7);
+    color: rgba(var(--accent), .8); cursor: pointer; transition: all .15s; display: grid; place-items: center; padding: 0; }
+  #winbar svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+  #np { position: fixed; right: 32px; bottom: 76px; z-index: 6; width: 330px; display: flex; gap: 14px; padding: 12px;
+    border: 1px solid var(--frame); background: rgba(3,14,24,.82); backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgba(0,0,0,.45); animation: npIn .35s ease; }
+  #np[hidden] { display: none; }
+  @keyframes npIn { from { opacity: 0; transform: translateY(8px); } }
+  #np .np-cov { position: relative; flex: 0 0 96px; height: 96px; padding: 0; border: 1px solid rgba(var(--accent), .3); background: rgba(0,20,40,.6);
+    cursor: pointer; display: grid; place-items: center; overflow: hidden; color: rgba(var(--accent), .6); }
+  #np .np-cov img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .4s; }
+  #np .np-cov img.ok { opacity: 1; }
+  #np .np-cov svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.4; }
+  #np .np-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #np .np-app { font: 600 9px var(--mono); letter-spacing: 3px; color: rgba(var(--accent), .75); text-transform: uppercase; }
+  #np .np-title { margin-top: 4px; font: 600 14px var(--hud); letter-spacing: .5px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #np .np-artist { font-size: 12px; color: #9fc4d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #np .np-bar { position: relative; height: 12px; margin-top: auto; cursor: pointer; }
+  #np .np-bar::before, #np .np-bar i { content: ""; position: absolute; left: 0; top: 5px; height: 2px; background: rgba(var(--accent), .18); right: 0; }
+  #np .np-bar i { right: auto; width: 0; background: rgb(var(--accent)); box-shadow: var(--glow); transition: width 1s linear; }
+  #np .np-row { display: flex; align-items: center; justify-content: space-between; font: 10px var(--mono); color: #7fa6b8; }
+  #np .np-ctl { display: flex; gap: 6px; }
+  #np .np-ctl button { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; cursor: pointer; border: 1px solid transparent;
+    background: none; color: #cfe8f4; border-radius: 50%; transition: all .15s; }
+  #np .np-ctl button:hover { color: #fff; border-color: rgba(var(--accent), .6); box-shadow: var(--glow); }
+  #np .np-ctl .np-pp { width: 36px; height: 36px; border-color: rgba(var(--accent), .7); background: rgba(var(--accent), .14); }
+  #np .np-ctl svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+  #np .np-ctl .np-pp svg { fill: currentColor; stroke-width: 2.2; }
+  #np .i-pause { display: none; } #np.playing .i-pause { display: inline; } #np.playing .i-play { display: none; }
+  #np .np-vol { display: flex; align-items: center; gap: 8px; margin-top: 4px; font: 10px var(--mono); color: #7fa6b8; }
+  #np .np-vol[hidden] { display: none; }
+  #np .np-vol button { width: 24px; height: 24px; padding: 0; border: 0; background: none; color: #cfe8f4; cursor: pointer; display: grid; place-items: center; }
+  #np .np-vol button:hover { color: #fff; }
+  #np .np-vol svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  #np .np-vol .mx { display: none; } #np .np-vol.muted .mx { display: inline; } #np .np-vol.muted .w1, #np .np-vol.muted .w2 { display: none; }
+  #np .np-vol.muted input { opacity: .35; }
+  #np .np-vol span { width: 26px; text-align: right; }
+  #np .np-vol input { flex: 1; -webkit-appearance: none; appearance: none; height: 16px; background: none; cursor: pointer; margin: 0; }
+  #np .np-vol input::-webkit-slider-runnable-track { height: 3px; background: linear-gradient(90deg, rgb(var(--accent)) var(--v, 100%), rgba(var(--accent), .18) var(--v, 100%)); }
+  #np .np-vol input::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4.5px; border-radius: 50%; background: #e8f8ff; box-shadow: var(--glow); }
+  #np .np-min { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; padding: 0; display: grid; place-items: center;
+    border: 1px solid transparent; background: none; color: #7fa6b8; cursor: pointer; }
+  #np .np-min:hover { color: #fff; border-color: rgba(var(--accent), .5); }
+  #np .np-min svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #npPill { position: relative; pointer-events: auto; display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 6px 0 4px;
+    max-width: min(560px, 100%); border: 1px solid rgba(var(--accent), .35); border-radius: 18px; overflow: hidden;
+    background: rgba(3,14,24,.85); backdrop-filter: blur(10px); box-shadow: 0 6px 22px rgba(0,0,0,.45), 0 0 14px rgba(0,180,255,.12);
+    animation: npIn .3s ease; }
+  #npPill[hidden] { display: none; }
+  #npPill .pp-open { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; height: 100%; padding: 0 6px 0 0; border: 0; background: none;
+    color: inherit; cursor: pointer; text-align: left; }
+  #npPill img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: rgba(var(--accent), .15); flex: 0 0 28px; }
+  #npPill.playing img { animation: ppSpin 9s linear infinite; }
+  #npPill.islogo img { animation: none !important; border-radius: 7px; }
+  @keyframes ppSpin { to { transform: rotate(360deg); } }
+  #npPill .pp-txt { min-width: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; overflow: hidden; }
+  #npPill .pp-txt b { font: 600 12.5px var(--hud); letter-spacing: .5px; color: #fff; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+  #npPill .pp-txt i { font-style: normal; font-size: 11.5px; color: #8fb6c8; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+  #npPill .pp-ctl { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+  #npPill .pp-ctl button { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: 1px solid transparent; border-radius: 50%;
+    background: none; color: #cfe8f4; cursor: pointer; }
+  #npPill .pp-ctl button:hover { color: #fff; border-color: rgba(var(--accent), .55); }
+  #npPill .pp-ctl .np-pp { background: rgba(var(--accent), .16); border-color: rgba(var(--accent), .6); }
+  #npPill .pp-ctl svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; stroke-linecap: round; }
+  #npPill .pp-ctl .np-pp svg { fill: currentColor; }
+  #npPill .pp-vol { width: auto !important; padding: 0 6px !important; border-radius: 14px !important; display: flex !important; gap: 4px; }
+  #npPill .pp-vol[hidden] { display: none !important; }
+  #npPill .pp-vol small { font: 9.5px var(--mono); color: #8fb6c8; }
+  #npPill .pp-vol .mx { display: none; } #npPill.muted .pp-vol .mx { display: inline; } #npPill.muted .pp-vol .w1 { display: none; }
+  #npPill .i-pause { display: none; } #npPill.playing .i-pause { display: inline; } #npPill.playing .i-play { display: none; }
+  #npPill .pp-bar { position: absolute; left: 18px; right: 18px; bottom: 0; height: 2px; background: rgba(var(--accent), .15); }
+  #npPill .pp-bar::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--p, 0%); background: rgb(var(--accent)); transition: width 1s linear; }
+  #mixpop { position: fixed; z-index: 13; right: 32px; top: 100px; width: min(420px, 86vw); max-height: 70vh; overflow-y: auto;
+    padding: 14px 16px 10px; border: 1px solid var(--frame); background: rgba(3,14,24,.96); backdrop-filter: blur(10px);
+    box-shadow: 0 12px 40px rgba(0,0,0,.6), 0 0 30px rgba(0,120,200,.15) inset; animation: npIn .25s ease; }
+  #mixpop .mx-h { display: flex; justify-content: space-between; align-items: center; font: 600 11px var(--mono); letter-spacing: 3px;
+    color: rgba(var(--accent), .85); margin-bottom: 8px; }
+  #mixpop .mx-h small { font: 10px var(--mono); letter-spacing: 1px; color: #6f93a5; }
+  #mixpop .mx-row { display: grid; grid-template-columns: 30px 108px 1fr 32px; align-items: center; gap: 8px; padding: 7px 0;
+    border-bottom: 1px solid rgba(var(--accent), .08); }
+  #mixpop .mx-row.master { border-bottom: 1px solid rgba(var(--accent), .3); padding-bottom: 10px; margin-bottom: 4px; }
+  #mixpop .mx-row b { font: 600 12.5px var(--hud); letter-spacing: .5px; color: #e6f6ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #mixpop .mx-row.master b { color: #fff; text-transform: uppercase; letter-spacing: 2px; font-size: 11.5px; }
+  #mixpop .mx-row span { font: 11px var(--mono); color: #8fb6c8; text-align: right; }
+  #mixpop .mx-mute { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border: 1px solid transparent; border-radius: 50%;
+    background: none; color: #cfe8f4; cursor: pointer; }
+  #mixpop .mx-mute:hover { border-color: rgba(var(--accent), .55); color: #fff; }
+  #mixpop .mx-mute svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  #mixpop .mx-row.muted .mx-mute { color: #ff8a8a; } #mixpop .mx-row.muted input { opacity: .35; }
+  .mx-range { width: 100%; -webkit-appearance: none; appearance: none; height: 22px; background: none; cursor: pointer; margin: 0; }
+  .mx-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+    background: linear-gradient(90deg, rgb(var(--accent)) var(--v, 50%), rgba(var(--accent), .18) var(--v, 50%)); }
+  .mx-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
+    background: #e8f8ff; box-shadow: 0 0 10px rgba(0,210,255,.6); }
+  body.hasnp #chat { right: 400px; }
+  body.pageopen #np { display: none; }
+  @media (max-width: 1100px), (max-height: 700px) {
+    #np { width: 290px; padding: 10px; gap: 12px; bottom: 84px; } #np .np-cov { flex-basis: 78px; height: 78px; }
+    body.hasnp #chat { right: 350px; } }
+  #topctl { position: fixed; top: 60px; right: 32px; z-index: 6; display: flex; gap: 6px; }
+  body.windowed #topctl { top: 46px; }
+  #topctl .tbtn { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; cursor: pointer; white-space: nowrap;
+    border: 1px solid var(--frame); background: rgba(4,16,26,.6); color: rgba(var(--accent), .85);
+    font: 600 12px var(--hud); letter-spacing: 2.5px; text-transform: uppercase; transition: all .15s; }
+  #topctl .tbtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  #topctl .tbtn:hover { color: #fff; border-color: rgba(0,210,255,.8); box-shadow: 0 0 10px rgba(0,210,255,.35); }
+  #topctl .tbtn.on { color: #fff; border-color: rgb(var(--accent)); background: rgba(0,210,255,.16); }
+  #topctl .tbtn.listen { color: #ffd29a; border-color: rgba(255,190,110,.8); background: rgba(255,160,40,.13); }
+  #topctl.icons .tbtn { padding: 0 7px; } #topctl.icons .tbtn span { display: none; }
+  #winbar button:hover { color: #fff; border-color: rgba(0,210,255,.8); box-shadow: var(--glow); background: rgba(0,210,255,.12); }
+  #winbar button.x:hover { border-color: rgba(255,110,110,.85); color: #ffb0b0; box-shadow: 0 0 12px rgba(255,80,80,.4);
+    background: rgba(255,80,80,.1); }
+  /* ---------------- paramètres */
+  #gear { position: fixed; right: 16px; bottom: 16px; z-index: 6; width: 36px; height: 36px; padding: 0;
+    border: 1px solid rgba(0,210,255,.16); background: rgba(4,16,26,.7); color: rgba(var(--accent), .7);
+    cursor: pointer; opacity: .55; transition: all .2s; display: grid; place-items: center; }
+  #gear svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+  #gear:hover { opacity: 1; color: #fff; border-color: rgba(0,210,255,.8); box-shadow: 0 0 10px rgba(0,210,255,.55); }
+  #settings { position: fixed; inset: 0; z-index: 10; background: rgba(1,4,8,.82); backdrop-filter: blur(8px);
+    display: none; overflow-y: auto; }
+  #settings.open { display: block; }
+  .sbox { max-width: 980px; margin: 40px auto 80px; padding: 0 24px; }
+  .shead { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; padding-right: 150px; }
+  .shead img { width: 54px; height: 54px; }
+  .shead h1 { margin: 0; font-weight: 300; letter-spacing: 6px; font-size: 30px; color: #fff; flex: 1; }
+  .sec { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 24px 20px;
+    margin-bottom: 18px; }
+  .sec h2 { margin: 0 0 4px; font-size: 19px; color: #fff; font-weight: 600; }
+  .sec .hint { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+  .row { display: flex; align-items: center; gap: 12px; margin: 8px 0; flex-wrap: wrap; }
+  .row label.l { flex: 1 1 320px; color: var(--text); font-size: 15px; }
+  input[type=text], input[type=number], input[type=time], select, textarea { background: rgba(0,0,0,.35); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 15px "Segoe UI", sans-serif; }
+  input[type=text], select { min-width: 220px; } input[type=number] { width: 110px; } input[type=time] { color-scheme: dark; }
+  select option { background: #06121c; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 70px; }
+  input[type=checkbox] { width: 20px; height: 20px; accent-color: rgb(0,210,255); }
+  .btn { background: rgba(0,210,255,.12); color: #fff; border: 1px solid rgba(0,210,255,.5); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; font: 14px "Segoe UI", sans-serif; }
+  .btn:hover { background: rgba(0,210,255,.25); }
+  .btn.main { background: rgb(0,170,215); border-color: rgb(0,210,255); font-weight: 600; padding: 10px 22px; }
+  .btn.del { background: transparent; border-color: rgba(255,120,120,.4); color: #ff9a9a; padding: 6px 10px; }
+  .act { display: flex; gap: 8px; margin: 6px 0; } .act input { flex: 1; }
+  .day { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: var(--text); }
+  .mode { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+  .ok { color: #6ef0a0; } .ko { color: #ffb36b; }
+  #saved { color: #6ef0a0; opacity: 0; transition: opacity .3s; }
+  /* page Clips */
+  .cview { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .cplayer { width: 100%; max-height: 46vh; background: #000; border: 1px solid rgba(var(--accent), .25); }
+  .cbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ctitle b { display: block; font-size: 13px; } .ctitle small { opacity: .65; font: 11px var(--mono); }
+  .btn.danger { border-color: rgba(255, 110, 80, .6); color: #ffb09a; }
+  .cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .ccard { content-visibility: auto; contain-intrinsic-size: 170px 150px; cursor: pointer; padding: 6px; border: 1px solid rgba(var(--accent), .18); background: rgba(0, 20, 40, .35); }
+  .ccard:hover { border-color: rgba(var(--accent), .5); } .ccard.on { border-color: rgb(var(--accent)); }
+  .cthumb { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #000; display: block; pointer-events: none; }
+  .ccard .cname { font-size: 11.5px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ccard small { opacity: .6; font: 10.5px var(--mono); }
+  /* page Imprimante 3D */
+  .prn { display: flex; flex-direction: column; gap: 12px; }
+  .prn-stat { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .prn-tile { border: 1px solid rgba(var(--accent), .22); background: rgba(0, 20, 40, .35); padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+  .prn-tile small { font: 10px var(--mono); letter-spacing: 3px; color: rgba(var(--accent), .7); }
+  .prn-tile b { font: 300 24px var(--hud); color: #fff; } .prn-tile span { font-size: 12px; opacity: .65; }
+  .prn-tile.bad b { color: #ffb36b; }
+  .prn-bar { height: 6px; background: rgba(var(--accent), .12); } .prn-bar i { display: block; height: 100%; width: 0; background: rgb(var(--accent)); box-shadow: var(--glow); transition: width .6s; }
+  .prn-ctl { display: flex; gap: 8px; flex-wrap: wrap; }
+  /* ---- page Agents IA (arbre animé façon JARVIS) ---- */
+  .ag { display: flex; flex-direction: column; gap: 14px; }
+  .ag-stage { position: relative; height: clamp(300px, 50vh, 520px); border: 1px solid var(--frame);
+    background: radial-gradient(ellipse at 50% 20%, rgba(0,150,255,.10), transparent 65%), linear-gradient(180deg, rgba(2,10,20,.85), rgba(1,6,12,.92)); }
+  .ag-stage::before { content: "NEURAL TASK NETWORK"; position: absolute; left: 14px; top: 10px; white-space: nowrap; width: auto; height: auto; border: 0; font: 600 9px var(--mono);
+    letter-spacing: 4px; color: rgba(var(--accent), .45); pointer-events: none; }
+  .ag-tree { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+  .ag-ask { display: flex; align-items: center; gap: 0; border: 1px solid var(--frame); background: rgba(2,12,22,.85); }
+  .ag-ask:focus-within { border-color: rgba(var(--accent), .7); box-shadow: 0 0 14px rgba(0,180,255,.18); }
+  .ag-prompt { padding: 0 6px 0 12px; font: 600 18px var(--mono); color: rgba(var(--accent), .8); }
+  .ag-ask input { flex: 1; min-width: 0; height: 40px; padding: 0 8px; border: 0; background: none; color: #e8f6ff; font: 13px var(--mono); outline: none; }
+  .ag-ask select { height: 40px; border: 0; border-left: 1px solid var(--frame); background: rgba(2,12,22,.9); color: #9fc4d6;
+    padding: 0 10px; font: 11px var(--mono); letter-spacing: 1px; }
+  .ag-send { height: 40px; padding: 0 18px; border: 0; border-left: 1px solid var(--frame); background: rgba(var(--accent), .14);
+    color: #fff; font: 600 11px var(--hud); letter-spacing: 3px; cursor: pointer; }
+  .ag-send:hover { background: rgba(var(--accent), .3); box-shadow: inset 0 0 14px rgba(0,210,255,.4); }
+  .ag-h { display: flex; align-items: center; gap: 12px; font: 600 10px var(--mono); letter-spacing: 4px; color: rgba(var(--accent), .75); }
+  .ag-h::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--frame), transparent); }
+  .ag-jobs { display: flex; flex-direction: column; gap: 8px; }
+  .ag-job { position: relative; padding: 9px 12px 9px 16px; background: linear-gradient(90deg, color-mix(in srgb, var(--c) 9%, transparent), rgba(2,10,18,.55) 40%);
+    border: 1px solid rgba(0,200,255,.12); }
+  .ag-job::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--c); box-shadow: 0 0 8px var(--c); }
+  .ag-job .top { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .ag-job .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); flex: 0 0 7px; }
+  .ag-job.live .dot { animation: agBlink 1s ease-in-out infinite; }
+  @keyframes agBlink { 50% { opacity: .25; } }
+  .ag-job .top b { font: 600 10.5px var(--hud); letter-spacing: 2px; text-transform: uppercase; color: var(--c); white-space: nowrap; }
+  .ag-job .top .t { flex: 1; min-width: 0; font-size: 12.5px; color: #dcefff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ag-job .tm { font: 10px var(--mono); color: #6f93a5; }
+  .ag-pill { font: 600 9px var(--mono); letter-spacing: 1.5px; padding: 3px 7px; border: 1px solid currentColor; text-transform: uppercase; white-space: nowrap; }
+  .ag-pill.en_cours { color: #00d2ff; box-shadow: 0 0 8px rgba(0,210,255,.35); } .ag-pill.attente { color: #8fb6c8; } .ag-pill.fini { color: #2ed573; }
+  .ag-pill.a_confirmer { color: #ffb142; } .ag-pill.erreur { color: #ff6b6b; }
+  .ag-steps { margin: 8px 0 2px 3px; padding-left: 12px; border-left: 1px solid color-mix(in srgb, var(--c) 35%, transparent); display: flex; flex-direction: column; gap: 3px; }
+  .ag-steps div { font: 10.5px var(--mono); color: #7fa6b8; }
+  .ag-steps div.tool { color: #cfe8f4; } .ag-steps div.tool::before { content: "▸ "; color: var(--c); }
+  .ag-steps div.error { color: #ff6b6b; } .ag-steps div:last-child { color: #fff; }
+  .ag-res { margin-top: 7px; font-size: 12.5px; line-height: 1.55; color: #cfe4f2; white-space: pre-wrap; }
+  .ag-res.short { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: #9fbfd0; }
+  .ag-sub { margin: 8px 0 2px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .ag-job.sub { background: rgba(2,10,18,.5); padding: 7px 10px 7px 14px; }
+  .ag-empty { font: 12px var(--mono); color: #6f93a5; padding: 8px 2px; }
+  @media (max-width: 1250px), (max-height: 760px) {
+    .ag-stage { height: clamp(300px, 56vh, 460px); }
+    .ag-ask input { font-size: 14px; height: 44px; } .ag-ask select, .ag-plan input[type=time] { height: 44px; font-size: 12px; max-width: 150px; }
+    .ag-send { height: 44px; padding: 0 14px; } .ag-h { font-size: 11px; }
+    .ag-job .top .t, .ag-res { font-size: 13.5px; } .ag-steps div { font-size: 11.5px; } .ag-mis .t { font-size: 13.5px; }
+  }
+  .ag-auto { display: flex; flex-direction: column; gap: 6px; }
+  .ag-mis { display: flex; align-items: center; gap: 12px; padding: 7px 10px; border: 1px solid rgba(0,200,255,.12); background: rgba(2,12,22,.55); }
+  .ag-mis b { font: 600 13px var(--hud); color: #fff; letter-spacing: 1px; } .ag-mis .d { font: 10px var(--mono); color: rgba(var(--accent), .8); letter-spacing: 1px; text-transform: uppercase; }
+  .ag-mis .t { flex: 1; min-width: 0; font-size: 12.5px; color: #cfe4f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ag-mis .x { border: 0; background: none; color: #6f93a5; cursor: pointer; font-size: 13px; } .ag-mis .x:hover { color: #ff8a8a; }
+  .ag-plan input[type=time] { height: 40px; border: 0; border-left: 1px solid var(--frame); background: rgba(2,12,22,.9); color: #cfe8f4; padding: 0 8px; font: 12px var(--mono); color-scheme: dark; }
+  #modepop { position: fixed; z-index: 13; right: 32px; top: 68px; width: min(560px, 80vw);
+    max-height: 60vh; overflow-y: auto; padding: 12px; border: 1px solid var(--frame); background: rgba(3,14,24,.96);
+    box-shadow: 0 12px 40px rgba(0,0,0,.6), 0 0 30px rgba(0,120,200,.15) inset; backdrop-filter: blur(10px); }
+  #modepop .mp-h { font: 600 11px var(--mono); letter-spacing: 3px; color: rgba(var(--accent), .85); margin: 2px 2px 10px; }
+  #modepop .mp-msg { font-size: 13px; opacity: .7; padding: 4px; }
+  #modepop .mp-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+  #modepop .mp-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; text-align: left; cursor: pointer;
+    border: 1px solid rgba(var(--accent), .25); background: rgba(0,20,40,.5); color: #d6ecf5; font: inherit; }
+  #modepop .mp-card:hover, #modepop .mp-game:hover { border-color: rgb(var(--accent)); background: rgba(var(--accent), .14); box-shadow: var(--glow); }
+  #modepop .mp-card b { font: 600 14px var(--hud); letter-spacing: 2px; text-transform: uppercase; color: #fff; }
+  #modepop .mp-card span { font-size: 12px; opacity: .7; }
+  #modepop .mp-games { display: flex; flex-wrap: wrap; gap: 8px; }
+  #modepop .mp-game { padding: 10px 14px; cursor: pointer; border: 1px solid rgba(var(--accent), .3); background: rgba(0,20,40,.5); color: #fff; font: 600 13px var(--hud); }
+  #modepop .mp-game.off { color: #bfeaff; font-weight: 400; }
+  .prn-plate { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 12px 16px !important; text-align: left; }
+  .prn-plate b { font: 600 15px var(--hud); letter-spacing: 3px; } .prn-plate span { font-size: 12.5px; font-weight: 400; opacity: .85; }
+  .prn-live { position: relative; height: 46vh; min-height: 240px; border: 1px solid rgba(var(--accent), .3);
+    background: radial-gradient(ellipse at 50% 60%, #06283a, #02060c 72%); flex: none; } .prn-msg { min-height: 18px; font-size: 13px; color: #9ef0c0; } .prn-msg.bad { color: #ffb09a; }
+  .btn.armed { border-color: #ffb36b; color: #ffd29a; }
+  .prn-h { display: flex; align-items: center; justify-content: space-between; font: 600 12px var(--hud); letter-spacing: 4px; color: rgba(var(--accent), .85); text-transform: uppercase; margin-top: 6px; }
+  .prn-drop { border: 1px dashed rgba(var(--accent), .45); padding: 14px; text-align: center; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .prn-drop.over { background: rgba(var(--accent), .12); color: #fff; }
+  .prn-files { display: flex; flex-direction: column; gap: 6px; }
+  .prn-file { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid rgba(var(--accent), .16); background: rgba(0, 20, 40, .3); flex-wrap: wrap; }
+  .prn-fn { flex: 1; min-width: 180px; } .prn-fn b { display: block; font-size: 13.5px; } .prn-fn small { opacity: .65; font: 11px var(--mono); }
+  .prn-fa { display: flex; gap: 6px; flex-wrap: wrap; }
+  /* petit écran (tablette en écran secondaire, ~960×600) : horloge et bandeau plus discrets, place à la sphère */
+  @media (max-width: 1100px), (max-height: 700px) {
+    #clock { top: 8px; } #clock .hm { font-size: 30px; letter-spacing: 5px; } #clock .d { margin-top: 4px; }
+    #clock::before, #clock::after { display: none; }
+    #hudbar { font-size: 10px; gap: 8px; letter-spacing: 1px; bottom: 8px; }
+    /* panneaux et boutons à la taille de la tablette (2026-10-19 : « c'est trop gros par rapport à la tablette ») */
+    .card { max-height: 46vh; }
+    .chead { padding: 4px 6px 4px 10px; gap: 6px; }
+    .ctitle { font-size: 9.5px; letter-spacing: 2px; }
+    .cx { width: 20px; height: 18px; font-size: 9px; }
+    .cbody { padding: 6px 9px 9px; font-size: 10.5px; line-height: 1.4; }
+    .cbody h2, .cbody h3 { font-size: 10.5px; margin: 6px 0 3px; letter-spacing: 1.5px; }
+    .cbody ul, .cbody ol { padding-left: 16px; margin: 3px 0; }
+    .cbody p { margin: 4px 0; }
+    /* boutons : la tablette est TACTILE, il faut de grosses cibles pour le doigt (2026-10-19) */
+    #controls { bottom: 26px; gap: 6px; }
+    #controls .row2 { gap: 8px; }
+    .cbtn { height: 38px; padding: 0 14px; gap: 8px; font-size: 10.5px; letter-spacing: 1.5px; }
+    .cbtn svg { width: 16px; height: 16px; }
+    #winbar { top: 10px; right: 10px; gap: 8px; }
+    #winbar button { width: 50px; height: 40px; }
+    #winbar svg { width: 18px; height: 18px; }
+    .cx { width: 30px; height: 26px; font-size: 12px; }
+    .sic { width: 36px; height: 36px; }
+    body.collapsed { --sidew: 70px; }
+  }
+
+  /* ---- fenêtre réduite (pas plein écran) : vrai bandeau pour la déplacer, bords et coins pour la redimensionner */
+  #tbar { display: none; position: fixed; top: 0; left: 0; right: 0; height: 30px; z-index: 11; align-items: center;
+    padding-left: 14px; box-sizing: border-box; cursor: grab; user-select: none; font: 600 11px var(--hud); letter-spacing: 5px;
+    color: #e8f6ff; text-shadow: var(--glow); border-bottom: 1px solid var(--frame);
+    background: linear-gradient(180deg, rgba(5,22,36,.96), rgba(3,12,20,.8)); }
+  #tbar small { margin-left: 14px; font: 9.5px var(--mono); letter-spacing: 3px; color: rgba(var(--accent), .65); text-shadow: none; }
+  body.windowed #tbar { display: flex; }
+  body.windowed #drag { top: 0; left: 0; right: 130px; height: 30px; }
+  body.windowed #winbar { top: 3px; right: 6px; gap: 4px; }
+  body.windowed #winbar button { width: 34px; height: 24px; }
+  body.windowed #winbar svg { width: 13px; height: 13px; }
+  body.windowed #clock { top: 40px; } body.windowed #ambient { top: 124px; }
+  body.windowed #side { top: 42px; bottom: 12px; }
+  body.windowed #page { top: 78px; } body.windowed #timers { top: 70px; }
+  body.windowed #frame i:nth-child(1), body.windowed #frame i:nth-child(2) { top: 36px; }
+  .rz { display: none; position: fixed; z-index: 40; }
+  body.windowed:not(.isfull) .rz { display: block; }   /* bords à tirer seulement hors plein écran */
+  .rz.n, .rz.s { left: 12px; right: 12px; height: 6px; cursor: ns-resize; } .rz.n { top: 0; } .rz.s { bottom: 0; }
+  .rz.e, .rz.w { top: 12px; bottom: 12px; width: 6px; cursor: ew-resize; } .rz.e { right: 0; } .rz.w { left: 0; }
+  .rz.nw, .rz.ne, .rz.sw, .rz.se { width: 14px; height: 14px; }
+  .rz.nw { top: 0; left: 0; cursor: nwse-resize; } .rz.se { bottom: 0; right: 0; cursor: nwse-resize; }
+  .rz.ne { top: 0; right: 0; cursor: nesw-resize; } .rz.sw { bottom: 0; left: 0; cursor: nesw-resize; }
+  /* fenêtre étroite : tout se serre (panneau réduit, boutons et bandeau plus petits) */
+  @media (max-width: 1000px) {
+    #controls .cbtn { padding: 0 10px; font-size: 10px; letter-spacing: 1px; height: 34px; }
+    #controls .row2 { gap: 6px; flex-wrap: wrap; justify-content: center; }
+    #clock .hm { font-size: 30px; letter-spacing: 5px; } #clock::before, #clock::after { display: none; }
+    #hudbar { left: calc(var(--sidew) + 28px); right: 28px; font-size: 10px; gap: 8px; letter-spacing: 1px; }
+    #hudbar .opt { display: none; }
+    #chat { left: calc(var(--sidew) + 28px); right: 24px; }
+  }
+  @media (max-height: 620px) { #chat { top: calc(50% + 22vmin); } #hudbar { bottom: 8px; } #controls { bottom: 30px; } }
+  /* panneau de gauche : défile au lieu de perdre des boutons quand la fenêtre est basse ; le bouton agrandir / réduire reste en haut */
+  #side { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+  #side::-webkit-scrollbar { display: none; }
+  #side .sbrand { position: sticky; top: -12px; z-index: 3; margin: -12px -8px 0; padding: 12px 14px 8px;
+    background: linear-gradient(180deg, rgba(4,18,30,.98) 70%, rgba(4,18,30,0)); }
+  body.collapsed #side .sbrand { padding: 12px 0 8px; margin: -12px -8px 0; }
+  #side > .tab { flex: none; }
+  @media (max-height: 700px) {
+    .tab { padding: 4px 8px; } .tab .tx small { display: none; } .tab .idx { top: 4px; }
+    .ssec { padding: 4px 8px 2px; } .badge { margin-top: 4px; }
+    body.collapsed .tab { padding: 3px 0; justify-content: center; } .sic { width: 26px; height: 26px; }
+    .supd, .squiet { display: none; }
+  }
+  @media (max-height: 560px) { .tab { padding: 2px 8px; } .sic { width: 24px; height: 24px; } .sic svg { width: 17px; height: 17px; } }
+  /* une page, le tableau de bord ou la visionneuse 3D ouverts : ils prennent TOUT l'espace à droite du panneau
+     (sous le bandeau, jusqu'en bas) ; horloge, boutons Clavier / Micro…, bandeau d'état et messages sont masqués */
+  body.pageopen #page { top: 40px; bottom: 12px; left: calc(var(--sidew) + 30px); right: 12px; z-index: 7; }
+  body.pageopen #topctl, body.pageopen #controls, body.pageopen #hudbar, body.pageopen #clock, body.pageopen #ambient, body.pageopen #chat,
+  body.pageopen #gear { display: none !important; }
+  #dashov { left: calc(var(--sidew) + 30px) !important; right: 12px !important; top: 40px !important; bottom: 12px !important;
+    border: 1px solid var(--frame); transition: left .2s ease; }
+</style>
+</head>
+<body class="home hasside windowed">
+<canvas id="c"></canvas>
+<div id="clock"><div class="hm"><span id="clk-hm">--:--</span><span id="clk-s" class="s">--</span></div><div id="clk-d" class="d"></div></div>
+<div id="frame"><i></i><i></i><i></i><i></i></div>
+<div id="ambient"></div>
+<div id="tbar"><span>J.A.R.V.I.S</span></div>
+<div id="drag" class="pywebview-drag-region" ondblclick="send('win:toggle')"></div>
+<i class="rz n" data-e="n"></i><i class="rz s" data-e="s"></i><i class="rz e" data-e="e"></i><i class="rz w" data-e="w"></i>
+<i class="rz ne" data-e="ne"></i><i class="rz nw" data-e="nw"></i><i class="rz se" data-e="se"></i><i class="rz sw" data-e="sw"></i>
+<script>
+// Déplacement NATIF par Windows (jarvis_window.Api.start_drag) au lieu de celui de pywebview, qui faisait
+// disparaître la fenêtre pendant le glissé (surtout entre deux écrans d'échelles différentes).
+window.addEventListener('pywebviewready', () => {
+  const d = document.getElementById('drag');
+  if (!d || !(window.pywebview && window.pywebview.api && window.pywebview.api.start_drag)) return;
+  d.classList.remove('pywebview-drag-region');
+  d.ondblclick = null;
+  const grab = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    if (e.detail >= 2) { send('win:toggle'); return; }   // double-clic : grand / petit
+    window.pywebview.api.start_drag();
+  };
+  d.addEventListener('mousedown', grab);
+  document.getElementById('tbar').addEventListener('mousedown', grab);   // le bandeau visible de la fenêtre réduite
+  if (window.pywebview.api.start_resize) document.querySelectorAll('.rz').forEach(z => z.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    window.pywebview.api.start_resize(z.dataset.e);
+  }));
+});
+</script>
+<div id="hudbar"></div>
+<div id="chat"></div>
+<div id="timers"></div>
+<div id="controls">
+  <div id="npPill" hidden>
+    <button class="pp-open" title="Agrandir le lecteur" onclick="npSetMode('card')"><img alt=""><span class="pp-txt"><b></b><i></i></span></button>
+    <span class="pp-ctl"><button title="Précédent" onclick="npCmd('prev')"><svg viewBox="0 0 24 24"><path d="M6 5v14"/><path d="M18 5L9 12l9 7z"/></svg></button><button class="np-pp" title="Lecture / pause" onclick="npCmd('toggle')"><svg viewBox="0 0 24 24"><path class="i-play" d="M8 5l11 7-11 7z"/><path class="i-pause" d="M9 5v14M15 5v14"/></svg></button><button title="Suivant" onclick="npCmd('next')"><svg viewBox="0 0 24 24"><path d="M18 5v14"/><path d="M6 5l9 7-9 7z"/></svg></button>
+      <button class="pp-vol" title="Son : clic = mélangeur (toutes les applis), molette = volume de la musique" onclick="toggleMixer()"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="w1" d="M16.5 9.5a3.5 3.5 0 0 1 0 5"/><path class="mx" d="M16 9l5 6M21 9l-5 6"/></svg><small></small></button></span>
+    <i class="pp-bar"></i>
+  </div>
+  <form id="askbox" onsubmit="event.preventDefault(); sendAsk();">
+    <input id="askinput" type="text" autocomplete="off" placeholder="Écris à JARVIS… (Entrée pour envoyer, Échap pour fermer)">
+    <button type="submit" title="Envoyer">➤</button>
+  </form>
+  <div class="row2">
+    <button class="cbtn" id="btnKeys" title="Écrire à JARVIS" onclick="toggleAsk()"><svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h1M9 10h1M12 10h1M15 10h1M18 10h0M7 14h10"/></svg>Clavier</button>
+    <button class="cbtn" id="btnMic" title="Couper / rallumer le micro" onclick="send('mic_toggle')"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/><path class="slash" d="M4 4l16 16" style="display:none"/></svg><span>Micro</span></button>
+    <button class="cbtn" id="btnAll" title="Mode normal : JARVIS répond seulement si tu dis « Jarvis ». Clique pour qu'il entende et réponde à TOUT." onclick="send('listen_all_toggle')"><svg viewBox="0 0 24 24"><path d="M4 9v6M8 6v12M12 3v18M16 6v12M20 9v6"/></svg><span>Sur « Jarvis »</span></button>
+    <button class="cbtn" id="btnPause" title="Mettre JARVIS en pause / le reprendre (comme un double-clic sur la sphère)" onclick="send('toggle_pause')"><svg viewBox="0 0 24 24"><path class="ico-pause" d="M9 5v14M15 5v14"/><path class="ico-play" d="M8 5l11 7-11 7z" style="display:none"/></svg><span>Pause</span></button>
+  </div>
+</div>
+<div id="globe" class="hudbox"><div class="phead"><div><div class="code">// GLOBE</div><h2 id="globeTitle">TERRE</h2></div>
+  <span class="sub" id="globeSub"></span><button class="cx" title="Fermer (Échap)" onclick="closeGlobe()">✕</button></div>
+  <div id="globeView"><div id="globeInfo"></div></div><span class="cn1"></span><span class="cn2"></span></div>
+<div id="side" class="hudbox"></div>
+<div id="page" class="hudbox"></div>
+<div id="cards"></div>
+<div id="np" class="hudbox" hidden>
+  <button class="np-min" title="Réduire le lecteur" onclick="npSetMode('pill')"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+  <button class="np-cov" title="Ouvrir l'appli" onclick="npCmd('open')"><img alt=""><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button>
+  <div class="np-main">
+    <div class="np-app"></div>
+    <div class="np-title"></div>
+    <div class="np-artist"></div>
+    <div class="np-bar" title="Avancer dans le morceau"><i></i></div>
+    <div class="np-row"><span class="np-t0">0:00</span>
+      <span class="np-ctl"><button title="Précédent" onclick="npCmd('prev')"><svg viewBox="0 0 24 24"><path d="M6 5v14"/><path d="M18 5L9 12l9 7z"/></svg></button><button class="np-pp" title="Lecture / pause" onclick="npCmd('toggle')"><svg viewBox="0 0 24 24"><path class="i-play" d="M8 5l11 7-11 7z"/><path class="i-pause" d="M9 5v14M15 5v14"/></svg></button><button title="Suivant" onclick="npCmd('next')"><svg viewBox="0 0 24 24"><path d="M18 5v14"/><path d="M6 5l9 7-9 7z"/></svg></button></span>
+      <span class="np-t1">0:00</span></div>
+    <div class="np-vol"><button title="Couper / remettre le son de l'appli" onclick="npCmd('mute')"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="w1" d="M16.5 9.5a3.5 3.5 0 0 1 0 5"/><path class="w2" d="M19 7a7 7 0 0 1 0 10"/><path class="mx" d="M16 9l5 6M21 9l-5 6"/></svg></button>
+      <input type="range" min="0" max="100" step="1" value="100" title="Volume de l'appli (pas celui du PC)"><span>100</span></div>
+  </div>
+</div>
+<div id="topctl">
+  <button class="tbtn" id="btnMix" title="Son : volume général et de chaque appli" onclick="toggleMixer()"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 9.5a3.5 3.5 0 0 1 0 5"/><path d="M19 7a7 7 0 0 1 0 10"/></svg><span>Son</span></button>
+  <button class="tbtn" id="btnModes" title="Choisir un mode (jeu, travail, musique…)" onclick="toggleModes()"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Modes</span></button>
+</div>
+<div id="winbar">
+  <button title="Réduire" onclick="send('win:minimize')"><svg viewBox="0 0 16 16"><path d="M3 10.5h10"/></svg></button>
+  <button title="Plein écran / petite fenêtre" onclick="send('win:toggle')"><svg viewBox="0 0 16 16"><path d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3"/></svg></button>
+  <button class="x" title="Fermer (JARVIS reste en arrière-plan)" onclick="send('win:close')"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+</div>
+<button id="gear" title="Paramètres de JARVIS"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="6.5"/></svg></button>
+<div id="settings"><div class="sbox">
+  <div class="shead"><img src="/logo.svg" alt=""><h1>PARAMÈTRES</h1>
+    <span id="saved">✓ Enregistré</span>
+    <button class="btn main" id="save">Enregistrer</button>
+    <button class="btn" id="sclose">Fermer</button></div>
+  <div id="sbody">Chargement…</div>
+</div></div>
+<script>window.JTOKEN = "__JTOKEN__";</script>
+
+<script>
+// ------------------------------------------------------------------ markdown minimal
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function inline(s) {
+  s = esc(s);
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return s;
+}
+// graphique en barres : bloc ```chart {"labels":[...],"values":[...]} ```
+function chartSvg(d) {
+  const v = d.values || [], lab = d.labels || [], n = Math.max(1, v.length), max = Math.max(1, ...v);
+  const W = 400, H = 150, pad = 18, bw = (W - 8) / n;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H + pad}">`;
+  v.forEach((x, k) => {
+    const h = Math.max(2, (x / max) * (H - 22)), xx = 4 + k * bw + bw * 0.15, w = bw * 0.7;
+    s += `<rect x="${xx}" y="${H - h}" width="${w}" height="${h}" rx="3"></rect>`;
+    s += `<text x="${xx + w / 2}" y="${H - h - 5}" class="cv">${x}</text>`;
+    if (n <= 16 || k % 2 === 0) s += `<text x="${xx + w / 2}" y="${H + 13}" class="cl">${esc(String(lab[k] ?? ''))}</text>`;
+  });
+  return s + '</svg>';
+}
+function md(src) {
+  const lines = src.replace(/\r/g, '').split('\n');
+  let html = '', i = 0;
+  while (i < lines.length) {
+    let l = lines[i];
+    if (/^```chart/.test(l)) {
+      let js = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) js.push(lines[i++]);
+      i++;
+      try { html += chartSvg(JSON.parse(js.join('\n'))); } catch (e) { /* bloc incomplet (en cours d'écriture) */ }
+      continue;
+    }
+    if (/^```/.test(l)) {
+      let code = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) code.push(lines[i++]);
+      html += `<pre><code>${esc(code.join('\n'))}</code></pre>`; i++; continue;
+    }
+    let h = l.match(/^(#{1,4})\s+(.*)/);
+    if (h) { const n = Math.min(4, h[1].length + 1); html += `<h${n}>${inline(h[2])}</h${n}>`; i++; continue; }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) { html += '<hr>'; i++; continue; }
+    if (/^\s*\|.*\|\s*$/.test(l)) {
+      let rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(lines[i++]);
+      rows = rows.filter(r => !/^\s*\|[\s:|-]+\|\s*$/.test(r))
+                 .map(r => r.trim().slice(1, -1).split('|').map(c => inline(c.trim())));
+      html += '<table>' + rows.map((r, k) => '<tr>' + r.map(c => k ? `<td>${c}</td>` : `<th>${c}</th>`).join('') + '</tr>').join('') + '</table>';
+      continue;
+    }
+    if (/^\s*([-*•]|\d+[.)])\s+/.test(l)) {
+      const ordered = /^\s*\d+[.)]/.test(l), start = ordered ? parseInt(l) : 1; let items = [];
+      const item = /^\s*([-*•]|\d+[.)])\s+/;
+      while (i < lines.length) {
+        if (item.test(lines[i])) { items.push(lines[i++].replace(item, '')); continue; }
+        // une ligne vide entre deux éléments ne coupe pas la liste
+        let j = i; while (j < lines.length && !lines[j].trim()) j++;
+        if (j > i && j < lines.length && item.test(lines[j])) { i = j; continue; }
+        break;
+      }
+      html += (ordered ? `<ol start="${start}">` : '<ul>') + items.map(t => `<li>${inline(t)}</li>`).join('') + (ordered ? '</ol>' : '</ul>');
+      continue;
+    }
+    if (/^>\s?/.test(l)) { html += `<blockquote>${inline(l.replace(/^>\s?/, ''))}</blockquote>`; i++; continue; }
+    if (!l.trim()) { i++; continue; }
+    let para = [];
+    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|\s*([-*•]|\d+[.)])\s|\s*\|)/.test(lines[i])) para.push(lines[i++]);
+    html += para[0].startsWith('⏱') ? `<p class="foot">${inline(para.join(' '))}</p>`
+                                    : `<p>${inline(para.join(' '))}</p>`;
+  }
+  return html;
+}
+
+// ------------------------------------------------------------------ petites fenêtres autour de la sphère
+const cardsEl = document.getElementById('cards');
+let screen = { active: null, panels: [] };
+let lastChange = 0, zTop = 20, placed = 0;
+const cardEls = new Map();  // id -> { el, body, len }
+
+// largeur occupée à gauche par le panneau fixe (agenda, notes...) : la sphère et les fenêtres se placent à côté
+const sideEl = document.getElementById('side');
+function sideW() { return sideEl.offsetWidth ? sideEl.offsetWidth + 14 : 0; }
+
+function slotFor(n) {
+  // alternance gauche / droite ; sur chaque côté, les fenêtres se rangent les unes sous les autres
+  // (sans se chevaucher ni cacher la sphère au centre) ; s'il n'y a plus de place : en cascade.
+  const sw = sideW();
+  const w = innerWidth < 1100 ? Math.max(180, (innerWidth - sw) * 0.25)   // tablette : panneaux plus étroits
+                               : Math.max(280, Math.min(420, (innerWidth - sw) * 0.3));
+  const left = n % 2 === 0;
+  const x = left ? sw + 24 : innerWidth - w - 24;
+  let y = 64;
+  for (const { el } of cardEls.values()) {
+    if (el.classList.contains('closing')) continue;
+    const onSide = left ? el.offsetLeft < innerWidth / 2 : el.offsetLeft >= innerWidth / 2;
+    if (onSide) y = Math.max(y, el.offsetTop + el.offsetHeight + 14);
+  }
+  if (y > innerHeight - 160) {  // côté plein : cascade par-dessus
+    const k = Math.floor(n / 2) % 5;
+    return { x: Math.max(8, x + (left ? k * 26 : -k * 26)), y: 64 + k * 54, w };
+  }
+  return { x: Math.max(8, x), y, w };
+}
+
+// Les fenêtres restent toujours visibles, même si JARVIS change de taille (plein écran <-> fenêtre).
+function keepCardsInside() {
+  for (const { el } of cardEls.values()) {
+    const maxX = Math.max(sideW() + 8, innerWidth - el.offsetWidth - 8);
+    const maxY = Math.max(8, innerHeight - el.offsetHeight - 8);
+    el.style.left = Math.min(Math.max(sideW() + 8, el.offsetLeft), maxX) + 'px';
+    el.style.top = Math.min(Math.max(8, el.offsetTop), maxY) + 'px';
+  }
+}
+addEventListener('resize', keepCardsInside);
+// le panneau de gauche s'agrandit / se réduit : les petites fenêtres qu'il recouvrirait sont poussées plus loin, au fil de l'animation
+new ResizeObserver(() => { keepCardsInside(); if (window.fitTopctl) setTimeout(fitTopctl, 250); }).observe(sideEl);
+// fenêtre réduite (pas plein écran) : bandeau + bords de redimensionnement ; fenêtre étroite : panneau de gauche réduit tout seul
+let sideAuto = false;
+function updWin() {
+  const sc = window.screen, full = innerWidth >= sc.width - 24 && innerHeight >= sc.height - 24;   // (« screen » est une variable de la page : window.screen)
+  document.body.classList.add('windowed');          // le bandeau « J.A.R.V.I.S » reste en plein écran aussi (2026-10-20)
+  document.body.classList.toggle('isfull', full);
+  if (typeof renderSide !== 'function' || typeof collapsed === 'undefined') return;
+  if (innerWidth < 1000 && !collapsed) { collapsed = true; sideAuto = true; document.body.classList.add('collapsed'); renderSide(); }
+  else if (innerWidth >= 1150 && sideAuto && collapsed) { collapsed = false; sideAuto = false; document.body.classList.remove('collapsed'); renderSide(); }
+}
+addEventListener('resize', updWin);
+setTimeout(updWin, 400); setTimeout(updWin, 1500);
+
+function makeCard(p) {
+  const el = document.createElement('div');
+  el.className = 'card hudbox';
+  const pos = slotFor(placed++);
+  Object.assign(el.style, { left: pos.x + 'px', top: pos.y + 'px', width: pos.w + 'px', zIndex: ++zTop });
+  el.innerHTML = '<div class="chead"><span class="ctitle"></span><button class="cx" title="Fermer">✕</button></div>'
+               + '<div class="cbody mdc"></div><span class="cn1"></span><span class="cn2"></span>';
+  el.querySelector('.ctitle').textContent = p.title;
+  if (p.title.startsWith('Tâche')) el.classList.add('task');
+  el.querySelector('.cx').onclick = (e) => { e.stopPropagation(); el.classList.add('closing'); send('close:' + p.id); };
+  const head = el.querySelector('.chead');
+  head.addEventListener('pointerdown', (e) => {
+    if (e.target.classList.contains('cx')) return;
+    el.style.zIndex = ++zTop;
+    head.setPointerCapture(e.pointerId);
+    const dx = e.clientX - el.offsetLeft, dy = e.clientY - el.offsetTop;
+    const move = (ev) => {  // la fenêtre reste entière à l'écran, à droite du panneau de gauche
+      const maxX = Math.max(sideW() + 8, innerWidth - el.offsetWidth - 8);
+      const maxY = Math.max(8, innerHeight - el.offsetHeight - 8);
+      el.style.left = Math.max(sideW() + 8, Math.min(maxX, ev.clientX - dx)) + 'px';
+      el.style.top = Math.max(8, Math.min(maxY, ev.clientY - dy)) + 'px';
+    };
+    const up = () => { head.removeEventListener('pointermove', move); head.removeEventListener('pointerup', up); };
+    head.addEventListener('pointermove', move);
+    head.addEventListener('pointerup', up);
+  });
+  el.addEventListener('pointerdown', () => { el.style.zIndex = ++zTop; });
+  cardsEl.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('shown'));
+  return { el, body: el.querySelector('.cbody'), len: -1 };
+}
+
+function renderScreen() {
+  const ids = new Set(screen.panels.map(p => p.id));
+  for (const [id, c] of cardEls) {
+    if (!ids.has(id)) { c.el.classList.add('closing'); setTimeout(() => c.el.remove(), 260); cardEls.delete(id); }
+  }
+  if (!cardEls.size) placed = 0;
+  for (const p of screen.panels) {
+    let c = cardEls.get(p.id);
+    if (!c) {
+      c = makeCard(p); cardEls.set(p.id, c);
+      if (pageTab) openPage(null);  // JARVIS montre quelque chose : la page ne doit pas le cacher
+    }
+    if (c.len !== p.md.length) {
+      if (c.len >= 0 && p.id === screen.active) c.el.style.zIndex = ++zTop;  // mise à jour : elle repasse devant
+      const b = c.body, atBottom = b.scrollTop + b.clientHeight >= b.scrollHeight - 30;
+      b.innerHTML = md(p.md) + (Date.now() - lastChange < 1500 ? '<span class="cursor"></span>' : '');
+      if (atBottom && c.len >= 0) b.scrollTop = b.scrollHeight;  // suit l'écriture en direct
+      c.len = p.md.length;
+    }
+  }
+}
+setInterval(() => {
+  if (Date.now() - lastChange > 1500) {
+    for (const c of cardEls.values()) if (c.body.querySelector('.cursor')) { c.len = -1; }
+    renderScreen();
+  }
+}, 600);
+
+// ------------------------------------------------------------------ paramètres de JARVIS
+const ACT_TYPES = [['close', 'Fermer (applis, Edge...)'], ['app', 'Application'], ['url', 'Site web'], ['game', 'Jeu'], ['music', 'Musique'],
+                   ['keys', 'Touches'], ['volume', 'Volume (monte/baisse)'], ['say', 'Phrase à dire'],
+                   ['arrange', 'Ranger les fenêtres (quadrants, côte à côte, colonnes)']];
+let S = null, settingsShown = false;
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'on') { for (const [ev, f] of Object.entries(v)) e.addEventListener(ev, f); }
+    else if (k === 'style' || k.startsWith('data')) e.setAttribute(k, v);
+    else e[k] = v;
+  }
+  for (const k of kids) e.append(k);
+  return e;
+}
+function api(path, body) {
+  return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ token: window.JTOKEN }, body)) }).then(r => r.json());
+}
+
+function actRow(list, a) {
+  const type = Object.keys(a).find(k => ACT_TYPES.some(t => t[0] === k)) || 'app';
+  const sel = el('select', {}, ...ACT_TYPES.map(([v, l]) => el('option', { value: v, textContent: l, selected: v === type })));
+  const inp = el('input', { type: 'text', value: a[type] ?? '', placeholder: 'ex : Discord, https://..., Warzone' });
+  const row = el('div', { className: 'act' }, sel, inp,
+    el('button', { className: 'btn del', textContent: '✕', on: { click: () => row.remove() } }));
+  row.read = () => ({ [sel.value]: inp.value.trim() });
+  list.append(row);
+}
+function actEditor(actions) {
+  const list = el('div');
+  (actions || []).forEach(a => actRow(list, a));
+  const box = el('div', {}, list, el('button', { className: 'btn', textContent: '+ Ajouter une action',
+    on: { click: () => actRow(list, {}) } }));
+  box.read = () => [...list.children].map(r => r.read()).filter(a => Object.values(a)[0] !== '' || 'music' in a);
+  return box;
+}
+function section(title, hint, ...kids) {
+  return el('div', { className: 'sec' }, el('h2', { textContent: title }), el('p', { className: 'hint', textContent: hint }), ...kids);
+}
+
+function renderSettings() {
+  const body = document.getElementById('sbody');
+  body.innerHTML = '';
+  // Général
+  const inputs = {};
+  const gen = S.fields.map(f => {
+    let inp;
+    if (f.type === 'bool') inp = el('input', { type: 'checkbox', checked: !!f.value });
+    else if (f.type === 'number') inp = el('input', { type: 'number', step: 'any', value: f.value });
+    else if (f.type === 'select') inp = el('select', {}, ...f.options.map(([v, l]) => el('option', { value: v, textContent: l, selected: v === f.value })));
+    else if (f.type === 'voice') {
+      inp = el('select', {}, ...(S.live_voices || []).map(([v, l]) => el('option', { value: v, textContent: l, selected: v === f.value })));
+      const sel = inp;
+      inp = el('span', {}, sel, el('button', { className: 'btn', textContent: '▶ Écouter', style: 'margin-left:8px',
+        on: { click: () => api('/api/run', { what: 'preview_voice', voice: sel.value }) } }));
+      inp.value = sel.value;
+      Object.defineProperty(inp, 'value', { get: () => sel.value });
+    }
+    else if (f.type === 'mic' || f.type === 'clapmic') {
+      // choix du micro + test (3 s d'écoute) ; pour les claquements : calibrage et test en direct en plus
+      const mics = S.mics || [];
+      // micro d'écouteurs Bluetooth : l'ouvrir les fait passer en « kit main-libre » (bruits de connexion, son coupé)
+      const headset = (m) => /casque|headset|buds|airpods|mains libres|hands-free|bluetooth/i.test(m);
+      const opts = [['', f.options]].concat(mics.map(m => [m, headset(m) ? m + ' — ⚠ déconseillé (coupe le son des écouteurs)' : m]));
+      if (f.value && !mics.includes(f.value)) opts.push([f.value, f.value + ' (débranché)']);
+      const sel = el('select', { style: 'max-width:440px' },
+        ...opts.map(([v, l]) => el('option', { value: v, textContent: l, selected: v === (f.value || '') })));
+      const res = el('div', { className: 'hint', style: 'margin:4px 0 0;flex-basis:100%',
+        textContent: f.type === 'mic' && S.mic_used ? 'En ce moment : ' + S.mic_used : '' });
+      const clap = f.type === 'clapmic';
+      const test = el('button', { className: 'btn', textContent: '🎙 Tester', on: { click: async () => {
+        res.className = 'hint'; res.textContent = (clap ? 'Tape dans tes mains' : 'Parle') + ' pendant 3 secondes…';
+        const r = await api('/api/run', { what: 'test_mic', device: sel.value, clap });
+        if (r.error) { res.className = 'ko'; res.textContent = 'Test impossible : ' + r.error; return; }
+        if (r.dead) { res.className = 'ko'; res.textContent = `⚠ Aucun son reçu de « ${r.name} » : micro inactif (écouteurs rangés, coupés ou pas en mode micro ?).`; return; }
+        if (r.peak < 0.0005) { res.className = 'ko'; res.textContent = `⚠ « ${r.name} » : silence total. Micro coupé ? Vérifie la touche « micro » du clavier (voyant allumé = coupé).`; return; }
+        const q = r.peak < 0.01 ? ['ko', 'presque rien : rapproche-toi ou monte le volume du micro'] : r.peak < 0.05 ? ['ko', 'faible']
+          : ['ok', 'bon'];
+        res.className = q[0]; res.textContent = `${q[0] === 'ok' ? '✓' : '⚠'} « ${r.name} » : niveau max ${r.peak.toFixed(2)} — ${q[1]}.`;
+      } } });
+      const extra = clap ? [
+        el('button', { className: 'btn', textContent: '⚙ Calibrer', title: 'Enregistre 4 claquements et règle la sensibilité',
+          on: { click: async () => { await save(); api('/api/run', { what: 'clap_calibrate' }); } } }),
+        el('button', { className: 'btn', textContent: '▶ Test en direct', title: 'Fenêtre qui affiche chaque claquement entendu',
+          on: { click: async () => { await save(); api('/api/run', { what: 'clap_test' }); } } })] : [];
+      inp = el('span', { style: 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 440px' }, sel, test, ...extra, res);
+      Object.defineProperty(inp, 'value', { get: () => sel.value });
+    }
+    else if (f.type === 'out') {
+      // sortie son de JARVIS + test (petite mélodie)
+      const outs = S.outs || [];
+      const opts = [['', f.options]].concat(outs.map(m => [m, m]));
+      if (f.value && !outs.includes(f.value)) opts.push([f.value, f.value + ' (débranchée)']);
+      const sel = el('select', { style: 'max-width:440px' },
+        ...opts.map(([v, l]) => el('option', { value: v, textContent: l, selected: v === (f.value || '') })));
+      const res = el('div', { className: 'hint', style: 'margin:4px 0 0;flex-basis:100%' });
+      const test = el('button', { className: 'btn', textContent: '🔊 Tester le son', on: { click: async () => {
+        res.className = 'hint'; res.textContent = 'Écoute : trois petites notes…';
+        const r = await api('/api/run', { what: 'test_out', device: sel.value });
+        if (r.error) { res.className = 'ko'; res.textContent = 'Test impossible : ' + r.error; return; }
+        res.className = 'hint'; res.textContent = `Joué sur « ${r.name} ». Rien entendu ? Vérifie que cette sortie n'est pas coupée `
+          + '(icône du son en bas à droite de Windows) et, pour des écouteurs, qu’ils sont bien dans tes oreilles.';
+      } } });
+      inp = el('span', { style: 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 440px' }, sel, test, res);
+      Object.defineProperty(inp, 'value', { get: () => sel.value });
+    }
+    else if (f.type === 'gemini') inp = el('select', {}, el('option', { value: '', textContent: 'Automatique (Flash le plus récent)' }),
+        ...S.gemini_models.map(m => el('option', { value: m, textContent: m, selected: m === f.value })));
+    else inp = el('input', { type: 'text', value: f.value ?? '' });
+    inputs[f.key] = inp;
+    return el('div', { className: 'row' }, el('label', { className: 'l', textContent: f.label }), inp);
+  });
+  body.append(section('Général', 'Ta voix, son cerveau et son comportement.', ...gen));
+
+  // Au lancement
+  const startup = actEditor(S.startup_open);
+  body.append(section('Au lancement de JARVIS', 'Ce qu’il ouvre automatiquement à chaque démarrage.', startup,
+    el('div', { className: 'row' }, el('button', { className: 'btn', textContent: '▶ Tester maintenant',
+      on: { click: async () => { await save(); api('/api/run', { what: 'test_startup' }); } } }))));
+
+  // Heures de cours : micro coupé à heures fixes
+  const DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  const quietBox = el('div');
+  const addQuiet = (p) => {
+    const days = DAYS.map((d, i) => {
+      const c = el('input', { type: 'checkbox', checked: (p.days || []).includes(i) });
+      c.dataset.day = i;
+      return el('label', { className: 'day' }, c, d);
+    });
+    const start = el('input', { type: 'time', value: p.start || '08:00' });
+    const end = el('input', { type: 'time', value: p.end || '12:00' });
+    const label = el('input', { type: 'text', value: p.label || '', placeholder: 'nom (ex : cours)' });
+    const box = el('div', { className: 'mode' },
+      el('div', { className: 'row' }, ...days),
+      el('div', { className: 'row' }, el('span', { textContent: 'de' }), start, el('span', { textContent: 'à' }), end, label,
+        el('button', { className: 'btn del', textContent: 'Supprimer', on: { click: () => box.remove() } })));
+    box.read = () => ({ days: days.map(d => d.firstChild).filter(c => c.checked).map(c => +c.dataset.day),
+                        start: start.value, end: end.value, label: label.value.trim() });
+    quietBox.append(box);
+  };
+  (S.quiet_hours || []).forEach(addQuiet);
+  body.append(section('Heures de cours', 'Pendant ces périodes, « OK Jarvis » et les claquements sont ignorés et le micro est fermé. '
+    + 'Ctrl+Alt+J l’ouvre quand même si tu en as besoin (le micro se recoupe quand tu refermes sa fenêtre).',
+    ...(S.quiet_now ? [el('p', { className: 'ok', textContent: 'En ce moment : micro coupé (' + S.quiet_now + ').' })] : []),
+    quietBox,
+    el('button', { className: 'btn', textContent: '+ Ajouter une période', on: { click: () => addQuiet({ days: [0, 1, 2, 3, 4] }) } })));
+
+  // Récap
+  const accChecks = S.accounts.map(a => {
+    const c = el('input', { type: 'checkbox', checked: S.briefing_accounts.includes(a.label) });
+    c.dataset.label = a.label;
+    return el('div', { className: 'row' }, c, el('label', { textContent: `${a.label} — ${a.email}` }));
+  });
+  const sites = el('textarea', { value: S.sites.join('\n'), placeholder: 'https://monsite.fr (un site par ligne)' });
+  body.append(section('Récap au démarrage', 'Boîtes mail à résumer (aucune cochée = toutes) et sites à surveiller.',
+    ...(accChecks.length ? accChecks : [el('p', { className: 'hint', textContent: 'Aucune boîte mail configurée.' })]),
+    el('h2', { textContent: 'Sites à surveiller', style: 'font-size:16px;margin-top:14px' }), sites));
+
+  // Boîtes mail
+  const accList = S.accounts.map(a => el('div', { className: 'row' },
+    el('label', { className: 'l', textContent: `${a.label} — ${a.email}` }),
+    el('button', { className: 'btn del', textContent: 'Retirer', on: { click: async () => {
+      if (confirm(`Retirer la boîte ${a.email} de JARVIS ?`)) { await api('/api/run', { what: 'delete_mail', email: a.email }); loadSettings(); }
+    } } })));
+  body.append(section('Boîtes mail', 'Les boîtes que JARVIS peut lire et depuis lesquelles il peut répondre.', ...accList,
+    el('button', { className: 'btn', textContent: '+ Ajouter une boîte mail', on: { click: () => api('/api/run', { what: 'mail' }) } })));
+
+  // Modes
+  const modesBox = el('div');
+  const addMode = (m) => {
+    const name = el('input', { type: 'text', value: m.name || '', placeholder: 'nom (ex : jeu)' });
+    const desc = el('input', { type: 'text', value: m.description || '', placeholder: 'description' });
+    const acts = actEditor(m.actions);
+    const box = el('div', { className: 'mode' }, el('div', { className: 'row' }, el('b', { textContent: 'Mode' }), name, desc,
+      el('button', { className: 'btn del', textContent: 'Supprimer', on: { click: () => box.remove() } })), acts);
+    box.read = () => ({ name: name.value.trim(), description: desc.value.trim(), actions: acts.read() });
+    modesBox.append(box);
+  };
+  S.modes.forEach(addMode);
+  body.append(section('Modes', 'Dis « Jarvis, mode jeu » pour lancer toutes les actions d’un mode d’un coup.', modesBox,
+    el('button', { className: 'btn', textContent: '+ Nouveau mode', on: { click: () => addMode({ actions: [{ app: '' }] }) } })));
+
+  // Claude Code : projets que JARVIS peut confier à Claude Code
+  const ccText = el('textarea', { value: Object.entries(S.claude_projects || {}).map(([k, v]) => k + ' = ' + v).join('\n'),
+    placeholder: 'mon projet = C:\\Users\\moi\\Projets\\monprojet  (un projet par ligne)' });
+  body.append(section('Claude Code', 'Dis « Jarvis, demande à Claude Code de… sur le projet X » : il fait le travail de code tout seul. '
+    + 'Le projet « jarvis » est déjà inclus. Ajoute tes projets (nom = dossier) :', ccText));
+  window.readCC = () => Object.fromEntries(ccText.value.split('\n').map(l => l.split('=')).filter(p => p.length >= 2)
+    .map(p => [p[0].trim(), p.slice(1).join('=').trim()]).filter(p => p[0] && p[1]));
+
+  // Téléphone (JARVIS mobile via Tailscale)
+  const phone = el('div', {}, el('p', { className: 'hint', textContent: 'Vérification de la connexion…' }));
+  body.append(section('Téléphone', 'Parle à JARVIS depuis ton téléphone, même loin de chez toi : les actions sont faites sur ce PC.', phone));
+  fetch('/api/m/pair?token=' + encodeURIComponent(window.JTOKEN)).then(r => r.json()).then(info => {
+    phone.innerHTML = '';
+    if (info.ok) {
+      phone.append(
+        el('div', { className: 'row' },
+          el('img', { src: info.qr, style: 'width:190px;height:190px;border-radius:10px;background:#fff;padding:6px' }),
+          el('div', { style: 'flex:1;min-width:240px;line-height:1.6' },
+            el('b', { textContent: '1. ' }), 'Scanne ce QR code avec l’appareil photo du téléphone (Tailscale doit être connecté sur le téléphone).', el('br'),
+            el('b', { textContent: '2. ' }), 'Dans le navigateur : « Ajouter à l’écran d’accueil » pour avoir l’appli JARVIS.', el('br'),
+            el('b', { textContent: '3. ' }), 'Écris ou appuie sur 🎙️ pour parler : il agit sur ce PC.')),
+        el('p', { className: 'hint', textContent: 'Adresse privée : https://' + info.host + '/m (visible seulement par tes appareils Tailscale).' }));
+    } else {
+      const why = { tailscale_missing: 'Tailscale n’est pas installé sur ce PC.', tailscale_offline: 'Tailscale est installé mais pas connecté : ouvre-le et connecte-toi.',
+                    serve_failed: 'Tailscale est connecté, mais le partage de JARVIS n’a pas pu être activé.' }[info.why] || 'Connexion indisponible.';
+      if (info.why === 'serve_disabled' && info.enable_url) {
+        phone.append(el('p', { className: 'ko', textContent: 'Dernière étape : active la fonction « Serve » de Tailscale (une seule fois, sur ton compte).' }),
+          el('div', { className: 'row' }, el('a', { href: info.enable_url, target: '_blank', className: 'btn main', textContent: 'Activer Serve sur Tailscale' }),
+            el('button', { className: 'btn', textContent: '↻ Vérifier à nouveau', on: { click: () => renderSettings() } })));
+        return;
+      }
+      phone.append(el('p', { className: 'ko', textContent: why }),
+        el('p', { className: 'hint', textContent: 'Installe Tailscale (gratuit) sur ce PC et sur ton téléphone, connecte-toi avec le même compte sur les deux, puis rouvre ces paramètres : le QR code de jumelage apparaîtra ici.' }));
+    }
+  }).catch(() => { phone.innerHTML = ''; phone.append(el('p', { className: 'ko', textContent: 'Impossible de vérifier la connexion.' })); });
+
+  // Icône de l'appli sur le téléphone : une couleur par PC (sinon deux icônes identiques sur l'iPhone)
+  const iconBox = el('div', { className: 'row', style: 'gap:12px;flex-wrap:wrap;align-items:flex-start' });
+  body.append(section('Icône sur le téléphone', 'Choisis une couleur différente pour chaque PC : sinon tu auras deux icônes JARVIS identiques sur ton téléphone.',
+    iconBox, el('p', { className: 'hint', textContent: 'Après un changement : supprime l’ancienne icône JARVIS du téléphone (appui long), rescanne le QR code ci-dessus, puis « Ajouter à l’écran d’accueil ». iOS garde l’ancienne image tant qu’on ne la remplace pas.' })));
+  const drawIcons = (d) => {
+    iconBox.innerHTML = '';
+    d.icons.forEach(ic => {
+      const on = ic.id === d.current;
+      iconBox.append(el('button', { className: 'btn', title: ic.label, style: 'padding:6px;border-radius:16px;display:flex;flex-direction:column;align-items:center;gap:4px;'
+          + (on ? 'outline:2px solid #5be3a0;outline-offset:1px' : ''),
+        on: { click: () => api('/api/m/icon', { icon: ic.id }).then(r => { if (r.ok) drawIcons({ ...d, current: r.current }); }) } },
+        el('img', { src: '/m/icon.png?s=' + ic.id + '&size=96', alt: ic.label, style: 'width:64px;height:64px;border-radius:14px;display:block' }),
+        el('small', { textContent: (on ? '✓ ' : '') + ic.label })));
+    });
+  };
+  fetch('/api/m/icons?token=' + encodeURIComponent(window.JTOKEN)).then(r => r.json()).then(d => { if (d.ok) drawIcons(d); })
+    .catch(() => { iconBox.append(el('p', { className: 'ko', textContent: 'Icônes indisponibles.' })); });
+
+  // Connexions
+  const status = (ok) => el('b', { className: ok ? 'ok' : 'ko', textContent: ok ? ' connecté' : ' non configuré' });
+  body.append(section('Connexions', 'Clés des services en ligne (elles restent chiffrées sur ton PC).',
+    el('div', { className: 'row' }, el('label', { className: 'l' }, 'Gemini (cerveau, écoute, vision) :', status(S.gemini_ok)),
+      el('button', { className: 'btn', textContent: 'Configurer', on: { click: () => api('/api/run', { what: 'gemini' }) } })),
+    el('div', { className: 'row' }, el('label', { className: 'l' }, 'ElevenLabs (voix premium) :', status(S.eleven_ok)),
+      el('button', { className: 'btn', textContent: 'Configurer', on: { click: () => api('/api/run', { what: 'elevenlabs' }) } })),
+    el('div', { className: 'row' }, el('label', { className: 'l' }, 'Google Agenda (lire et ajouter des rendez-vous) :', status(S.agenda_ok)),
+      el('button', { className: 'btn', textContent: 'Configurer', on: { click: () => api('/api/run', { what: 'agenda' }) } })),
+    el('div', { className: 'row' }, el('label', { className: 'l' }, 'Admin PC Radar (récap du site) :', status(S.pcradar_ok)),
+      el('button', { className: 'btn', textContent: 'Configurer', on: { click: () => api('/api/run', { what: 'pcradar' }) } }))));
+
+  window.readSettings = () => ({
+    general: Object.fromEntries(S.fields.map(f => [f.key, f.type === 'bool' ? inputs[f.key].checked : inputs[f.key].value])),
+    startup_open: startup.read(),
+    quiet_hours: [...quietBox.children].map(b => b.read()).filter(p => p.days.length && p.start && p.end && p.start !== p.end),
+    briefing_accounts: [...body.querySelectorAll('input[data-label]')].filter(c => c.checked).map(c => c.dataset.label)
+      .concat(S.briefing_accounts.filter(l => !S.accounts.some(a => a.label === l))),  // boîtes d'un autre PC : gardées
+    sites: sites.value.split('\n').map(x => x.trim()).filter(Boolean),
+    modes: [...modesBox.children].map(m => m.read()).filter(m => m.name),
+    claude_projects: window.readCC ? window.readCC() : undefined,
+  });
+}
+async function loadSettings() {
+  S = await fetch('/api/settings?token=' + encodeURIComponent(window.JTOKEN)).then(r => r.json());
+  renderSettings();
+}
+async function save() {
+  await api('/api/settings', { data: window.readSettings() });
+  const ok = document.getElementById('saved');
+  ok.style.opacity = 1;
+  setTimeout(() => { ok.style.opacity = 0; }, 1800);
+}
+document.getElementById('gear').onclick = () => send('settings');
+document.getElementById('sclose').onclick = () => send('close_settings');
+document.getElementById('save').onclick = save;
+function syncSettings() {
+  const open = !!screen.settings;
+  document.getElementById('settings').classList.toggle('open', open);
+  if (open && !settingsShown) loadSettings();
+  settingsShown = open;
+}
+
+// ------------------------------------------------------------------ panneau de gauche : onglets + pages
+const ICONS = {
+  agenda: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  rappels: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  notes: '<path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z"/><path d="M14 3.5V8h4M9 12h6M9 15.5h6"/>',
+  pcradar: '<path d="M4 19.5h16"/><path d="M5 15l4.5-5 3.5 3 6-7"/><path d="M15 6h4v4"/>',
+  mails: '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6.5L20.5 7"/>',
+  apis: '<path d="M9 7V4M15 7V4M7 7h10v4a5 5 0 0 1-10 0zM12 16v4"/>',
+  imprimante: '<path d="M5 3h14v3H5zM3 6h18v4H3zM7 10v5M17 10v5M9 13h6l-1 4h-4z"/><path d="M4 21h16M6 17v4M18 17v4"/>',
+  deck: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+  agents: '<circle cx="12" cy="6" r="3"/><circle cx="5" cy="17" r="2.5"/><circle cx="19" cy="17" r="2.5"/><circle cx="12" cy="19" r="2"/><path d="M10.5 8.5L6.3 15M13.5 8.5l4.2 6.5M12 9v8"/>',
+  dash: '<rect x="3" y="4" width="7.5" height="7.5"/><rect x="13.5" y="4" width="7.5" height="4.5"/><rect x="13.5" y="11.5" width="7.5" height="8.5"/><rect x="3" y="14.5" width="7.5" height="5.5"/>',
+  camera: '<path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/>',
+  clips: '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/><path d="M3 9h3M3 15h3M18 9h3M18 15h3"/>',
+  side: '<path d="M14.5 6l-6 6 6 6"/>', quiet: '<path d="M9 9v3a3 3 0 0 0 5.2 2M15 11V6a3 3 0 0 0-5.8-1"/><path d="M6.5 11.5a5.5 5.5 0 0 0 9 4.2M17.5 11.5c0 .5 0 1-.2 1.5M12 17v3.5M4 4l16 16"/>',
+};
+const TABS = [['agenda', 'Agenda'], ['rappels', 'Rappels'], ['notes', 'Notes'], ['pcradar', 'PC Radar'], ['mails', 'Mails'],
+  ['clips', 'Clips'], ['imprimante', 'Imprimante 3D'], ['agents', 'Agents IA'], ['deck', 'Deck'], ['dash', 'Tableau de bord'], ['camera', 'Caméra'], ['apis', 'API']];
+const icon = (k) => { const s = el('span', { className: 'sic' }); s.innerHTML = `<svg viewBox="0 0 24 24">${ICONS[k]}</svg>`; return s; };
+const sempty = (t) => el('div', { className: 'sempty', textContent: t });
+const fmt = (v) => (v === null || v === undefined ? '–' : String(v));
+let DASH = null, pageTab = null, pageKey = '', noteSel = null;
+let collapsed = false;
+// petit écran (tablette en écran secondaire) : panneau réduit par défaut, souvenir à part du grand écran
+const SIDE_KEY = innerWidth < 1200 ? 'jarvis_side_petit' : 'jarvis_side';
+try {
+  const v = localStorage.getItem(SIDE_KEY);
+  collapsed = v ? v === 'reduit' : SIDE_KEY === 'jarvis_side_petit';
+} catch (e) { /* stockage indisponible */ }
+document.body.classList.toggle('collapsed', collapsed);
+
+function sitem(when, text, sub, cls) {
+  const x = el('div', { className: 'x', textContent: text });
+  if (sub) x.append(el('small', { textContent: sub }));
+  return el('div', { className: 'si' + (cls ? ' ' + cls : '') }, el('div', { className: 'w', textContent: when }), x);
+}
+function grouped(items, dayOf, row) {
+  const out = []; let day = null;
+  for (const it of items) {
+    if (dayOf(it) !== day) { day = dayOf(it); out.push(el('div', { className: 'sday', textContent: day })); }
+    out.push(row(it));
+  }
+  return out;
+}
+
+// résumé de chaque onglet : [petite ligne, pastille, pastille orange ?]
+function tabInfo(k, d) {
+  if (k === 'agenda') {
+    const a = d.agenda;
+    if (!a) return ['Chargement…'];
+    if (!a.ok) return ['Non connecté'];
+    const now = new Date().toTimeString().slice(0, 5);
+    const today = a.events.filter(e => e.today), next = today.find(e => e.time === 'Journée' || e.time >= now);
+    return [next ? `${next.time} · ${next.title}` : today.length ? 'Fini pour aujourd’hui' : 'Rien aujourd’hui', today.length || ''];
+  }
+  if (k === 'rappels') {
+    const r = d.reminders, today = r.filter(x => x.day === "Aujourd'hui");
+    return [r.length ? `${r[0].day === "Aujourd'hui" ? '' : r[0].day + ' '}${r[0].time} · ${r[0].text}` : 'Aucun rappel', today.length || ''];
+  }
+  if (k === 'notes') return [d.notes.length ? d.notes[0].title : 'Aucune note', ''];
+  if (k === 'pcradar') {
+    const p = d.pcradar;
+    if (!p) return ['Chargement…'];
+    if (!p.ok) return ['Non connecté'];
+    const todo = (p.tickets || 0) + (p.suspects || 0);
+    return [`${fmt(p.today)} visiteurs aujourd’hui`, todo || '', true];
+  }
+  if (k === 'apis') return ['Brancher des services', ''];
+  if (k === 'deck') return ['Boutons stream, musique, raccourcis', ''];
+  if (k === 'imprimante') { const p = d.printer || {}; return [p.line || '…', '', p.state === 'error']; }
+  if (k === 'agents') {
+    if (!AG) return ['Patron + 5 spécialistes', ''];
+    const busy = AG.agents.filter(a => a.busy && a.key !== 'patron').length;
+    const wait = AG.jobs.filter(j => j.agent === 'patron' && j.status === 'a_confirmer').length;
+    return [busy ? `${busy} agent${busy > 1 ? 's' : ''} au travail` : 'Équipe disponible', busy || wait || '', !!wait];
+  }
+  if (k === 'dash') return ['Météo, PC Radar, mails, musique', ''];
+  if (k === 'camera') return [window.CAM3D && CAM3D.isOpen() ? 'Ouverte' : 'Écran avec les doigts · formes 3D', ''];
+  if (k === 'clips') {
+    const c = d.clips || { count: 0 };
+    return [c.count ? `Dernier : ${c.last}` : 'Aucun clip', c.count ? (c.count > 99 ? '99+' : c.count) : ''];
+  }
+  const m = d.mails;
+  if (!m) return ['Chargement…'];
+  if (!m.ok) return ['Non configuré'];
+  const n = m.boxes.reduce((s, b) => s + (b.count || 0), 0);
+  return [n ? `${n.toLocaleString('fr-FR')} non lu${n > 1 ? 's' : ''}` : 'Aucun non lu', n ? (n > 99 ? '99+' : n) : ''];
+}
+
+const corners = () => [el('span', { className: 'cn1' }), el('span', { className: 'cn2' })];
+
+function renderSide() {
+  const d = DASH;
+  const tog = el('button', { className: 'stog', title: collapsed ? 'Agrandir le panneau' : 'Réduire le panneau',
+    on: { click: () => { collapsed = !collapsed; document.body.classList.toggle('collapsed', collapsed);
+      try { localStorage.setItem(SIDE_KEY, collapsed ? 'reduit' : 'ouvert'); } catch (e) { /* rien */ }
+      renderSide(); [0, 120, 260, 400].forEach(t => setTimeout(keepCardsInside, t)); } } }, icon('side'));   // les petites fenêtres suivent le panneau
+  const brand = el('div', { className: 'sbrand' },
+    el('div', { className: 'lg', innerHTML: 'J.A.R.V.I.S<small>TABLEAU DE BORD</small>' }), tog);
+  const parts = [brand, el('div', { className: 'ssec', textContent: 'MODULES' })];
+  TABS.forEach(([k, name], i) => {
+    const [line, badge, warn] = d ? tabInfo(k, d) : ['Chargement…'];
+    const tab = el('div', { className: 'tab' + (pageTab === k ? ' on' : ''), title: name,
+      on: { click: () => (k === 'camera' ? toggleCamera() : k === 'dash' ? openDash() : openPage(pageTab === k ? null : k)) } },
+      icon(k), el('div', { className: 'tx' }, el('b', { textContent: name }), el('small', { textContent: line })),
+      el('span', { className: 'idx', textContent: String(i + 1).padStart(2, '0') }));
+    if (badge) tab.append(el('span', { className: 'badge' + (warn ? ' warn' : ''), textContent: badge }));
+    parts.push(tab);
+  });
+  parts.push(el('div', { style: 'flex:1' }));
+  if (d && d.quiet) parts.push(el('div', { className: 'squiet', title: 'Heures de cours : ' + d.quiet }, icon('quiet'),
+    el('span', { className: 'lb', textContent: 'Micro coupé · ' + d.quiet })));
+  if (d && d.updated) parts.push(el('div', { className: 'supd', textContent: 'Synchro ' + d.updated }));
+  sideEl.replaceChildren(...parts, ...corners());
+  renderHudbar();
+}
+
+// bandeau d'état en bas : état, micro, PC Radar, dernière synchro
+let hudKey = '', hudReady = false;  // prêt quand l'état de la sphère (state, LABELS) est défini plus bas
+function renderHudbar() {
+  if (!hudReady) return;
+  const d = DASH || {}, label = (LABELS[state] || 'SYSTÈMES EN LIGNE');
+  const micOff = !!d.quiet || state === 'paused' || micMuted;
+  const key = [label, micOff, micMuted, listenAll, d.quiet, d.updated, d.pcradar && d.pcradar.today].join('|');
+  if (key === hudKey) return;
+  hudKey = key;
+  const bar = document.getElementById('hudbar');
+  const item = (html) => el('span', { innerHTML: html });
+  const sep = (opt) => el('span', { className: 'sep' + (opt ? ' opt' : '') });
+  const opt = (html) => el('span', { className: 'opt', innerHTML: html });  // masqués quand la fenêtre est petite
+  const parts = [item('<b>J.A.R.V.I.S</b>'), sep(), item(esc(label)), sep(),
+    item(`<span class="dot${micOff ? ' off' : ''}"></span>MICRO ${micOff ? (micMuted ? 'COUPÉ' : d.quiet ? 'COUPÉ · COURS' : 'EN PAUSE') : 'ACTIF'}`)];
+  if (listenAll && !micOff) parts.push(sep(), item('<b style="color:#ffd29a">ÉCOUTE CONTINUE</b>'));
+  if (d.pcradar && d.pcradar.ok) parts.push(sep(true), opt(`PC RADAR <b>${esc(fmt(d.pcradar.today))}</b> VISITEURS`));
+  if (d.updated) parts.push(sep(true), opt('SYNC ' + esc(d.updated)));
+  bar.replaceChildren(...parts);
+}
+
+// Une vidéo de clip retirée de la page continue de jouer en fond (son) : on les arrête toutes en changeant de page,
+// en fermant la page, en réduisant ou en fermant la fenêtre.
+function stopClips() {
+  document.querySelectorAll('#page video').forEach(v => { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) { /* rien */ } });
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) document.querySelectorAll('#page video').forEach(v => { try { v.pause(); } catch (e) { /* rien */ } });
+});
+addEventListener('pagehide', stopClips);
+// Tableau de bord plein écran (dash.html) par-dessus l'interface : pages à faire glisser, pour laisser sur le 2e écran / la tablette
+function openDash() {
+  if (document.getElementById('dashov')) return;
+  if (window.M3D && document.querySelector('#m3d.on')) M3D.close();
+  if (pageTab) openPage(null);
+  const o = document.createElement('div'); o.id = 'dashov';
+  o.style.cssText = 'position:fixed;z-index:8;background:#02060c';
+  o.innerHTML = '<iframe src="/dash" title="Tableau de bord" style="width:100%;height:100%;border:0;background:#02060c"></iframe>';
+  document.body.appendChild(o); updPageOpen();
+  const f = o.querySelector('iframe'); f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* rien */ } });
+}
+function closeDash() { const o = document.getElementById('dashov'); if (o) o.remove(); updPageOpen(); }
+// une page / le tableau de bord / la visionneuse 3D ouverts : tout l'espace à droite du panneau, le reste masqué
+function updPageOpen() {
+  document.body.classList.toggle('pageopen', !!pageTab || !!document.getElementById('dashov') || !!document.querySelector('#m3d.on'));
+}
+addEventListener('message', (e) => { if (e.data === 'dash-close') closeDash(); });
+let dashN = -1;
+function dashState(d) { if (!d || d.n === dashN) return; dashN = d.n; if (d.on) openDash(); else closeDash(); }
+// ---- bouton « Modes » : choisir un mode d'un clic (mode jeu : on choisit aussi le jeu)
+// boutons du haut : jamais sur l'heure ni la date (barre latérale ouverte, petite fenêtre, tablette)
+function fitTopctl() {
+  const t = document.getElementById('topctl'); if (!t) return;
+  t.classList.remove('icons'); t.style.top = '';
+  const hit = () => { const r = t.getBoundingClientRect();
+    return ['clock', 'ambient'].some(id => { const e = document.getElementById(id); if (!e) return false;
+      const c = e.getBoundingClientRect(); return c.width && r.left < c.right + 12 && r.right > c.left && r.top < c.bottom && r.bottom > c.top; }); };
+  if (!hit()) return;
+  t.classList.add('icons');
+  if (!hit()) return;
+  const lows = ['clock', 'ambient'].map(id => document.getElementById(id)).filter(Boolean).map(e => e.getBoundingClientRect().bottom);
+  t.style.top = Math.ceil(Math.max(...lows) + 10) + 'px';
+  const mp = document.getElementById('modepop'); if (mp) mp.style.top = (t.getBoundingClientRect().bottom + 8) + 'px';
+}
+addEventListener('resize', fitTopctl);
+setInterval(fitTopctl, 1500);
+// ---- mini-lecteur de musique (Deezer ou toute appli qui joue) : pochette, avancement, commandes
+let npState = null, npCover = '', npHold = 0, npHoldPlaying = false;
+// logos des sites vidéo (dessinés ici, rien de téléchargé) : affichés quand il n'y a pas d'image
+const NP_LOGOS = {
+  'YouTube': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0f0f0f"/><rect x="14" y="27" width="72" height="46" rx="13" fill="#ff0033"/><path d="M43 39v22l19-11z" fill="#fff"/></svg>',
+  'YouTube Music': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0f0f0f"/><circle cx="50" cy="50" r="30" fill="#ff0033"/><circle cx="50" cy="50" r="17" fill="none" stroke="#fff" stroke-width="3"/><path d="M45 42v16l13-8z" fill="#fff"/></svg>',
+  'Netflix': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#000"/><path d="M33 18h12l10 34V18h12v64H55L45 49v33H33z" fill="#e50914"/></svg>',
+  'Twitch': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#9146ff"/><path d="M30 20l-6 12v44h16v10h10l10-10h12l16-16V20zm48 36l-9 9H57l-9 9v-9H35V27h43z" fill="#fff"/><path d="M52 38h6v16h-6zm14 0h6v16h-6z" fill="#fff"/></svg>',
+  'Prime Video': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#00a8e1"/><text x="50" y="47" font-family="Arial" font-weight="700" font-size="17" fill="#fff" text-anchor="middle">prime</text><text x="50" y="66" font-family="Arial" font-size="13" fill="#fff" text-anchor="middle">video</text></svg>',
+  'Disney+': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0e1a4f"/><text x="50" y="60" font-family="Georgia" font-style="italic" font-size="24" fill="#fff" text-anchor="middle">Disney+</text></svg>',
+  'Crunchyroll': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#f47521"/><circle cx="50" cy="50" r="26" fill="none" stroke="#fff" stroke-width="7"/><circle cx="58" cy="44" r="10" fill="#fff"/></svg>',
+  'Canal+': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#000"/><text x="50" y="58" font-family="Arial" font-weight="700" font-size="19" fill="#fff" text-anchor="middle">CANAL+</text></svg>',
+};
+const npLogo = (svc) => NP_LOGOS[svc] ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(NP_LOGOS[svc]) : '';
+
+const fmtT = (s) => { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+let npMode = 'pill'; try { npMode = localStorage.getItem('np_mode') || 'pill'; } catch (e) { /* rien */ }
+function npSetMode(m) {
+  npMode = m; try { localStorage.setItem('np_mode', m); } catch (e) { /* rien */ }
+  npRender(npState);
+}
+function npRender(d) {
+  const np = document.getElementById('np'), pill = document.getElementById('npPill');
+  if (d && d.mixer) { npMix = d.mixer; mixRender(); }
+  // après un clic Lecture/Pause : l'écran garde le nouvel état 2 s (Windows met un instant à le confirmer)
+  if (d && d.active && Date.now() < npHold) d.playing = npHoldPlaying;
+  if (d && d.active && !d.cover && d.service) d.cover = npLogo(d.service);
+  npState = d && d.active ? d : null;
+  np.hidden = !npState || npMode !== 'card';
+  pill.hidden = !npState || npMode === 'card';
+  document.body.classList.toggle('hasnp', !!npState && npMode === 'card');
+  if (!npState) return;
+  // pastille : pochette, titre — artiste, avancement, volume
+  pill.classList.toggle('playing', !!d.playing); pill.classList.toggle('muted', !!d.muted);
+  pill.classList.toggle('islogo', (d.cover || '').startsWith('data:'));
+  pill.querySelector('.pp-txt b').textContent = d.title; pill.querySelector('.pp-txt i').textContent = d.artist || '';
+  pill.querySelector('.pp-open').title = d.title + (d.artist ? ' — ' + d.artist : '') + ' (agrandir le lecteur)';
+  const pimg = pill.querySelector('img'); if ((pimg.getAttribute('src') || '') !== (d.cover || '')) { if (d.cover) pimg.src = d.cover; else pimg.removeAttribute('src'); }
+  pill.querySelector('.pp-bar').style.setProperty('--p', (d.dur ? Math.min(100, d.pos / d.dur * 100) : 0) + '%');
+  const pv = pill.querySelector('.pp-vol'); pv.hidden = !(d.vol >= 0);
+  if (Date.now() - npVolT > 2500) pv.querySelector('small').textContent = d.muted ? '' : (d.vol >= 0 ? d.vol : '');
+  np.classList.toggle('playing', !!d.playing);
+  np.querySelector('.np-app').textContent = (d.app || '') + (d.album ? ' · ' + d.album : '');
+  np.querySelector('.np-title').textContent = d.title; np.querySelector('.np-title').title = d.title;
+  np.querySelector('.np-artist').textContent = d.artist || '';
+  const img = np.querySelector('.np-cov img');
+  if ((d.cover || '') !== npCover) {
+    npCover = d.cover || ''; img.classList.remove('ok');
+    if (npCover) { img.onload = () => img.classList.add('ok'); img.src = npCover; } else img.removeAttribute('src');
+  }
+  np.querySelector('.np-cov').disabled = !d.deezer;
+  np.querySelector('.np-bar i').style.width = (d.dur ? Math.min(100, d.pos / d.dur * 100) : 0) + '%';
+  np.querySelector('.np-t0').textContent = fmtT(d.pos); np.querySelector('.np-t1').textContent = fmtT(d.dur);
+  const vb = np.querySelector('.np-vol'), vr = vb.querySelector('input');
+  vb.hidden = !(d.vol >= 0);
+  vb.classList.toggle('muted', !!d.muted);
+  if (d.vol >= 0 && Date.now() - npVolT > 2500) npVolShow(d.vol);   // pas pendant qu'on tire le curseur
+}
+let npVolT = 0, npVolSend = 0;
+function npVolShow(v) {
+  const vr = document.querySelector('#np .np-vol input');
+  vr.value = v; vr.style.setProperty('--v', v + '%'); document.querySelector('#np .np-vol span').textContent = v;
+}
+document.querySelector('#np .np-vol input').addEventListener('input', (e) => {
+  const v = +e.target.value; npVolT = Date.now(); npVolShow(v);
+  clearTimeout(npVolSend); npVolSend = setTimeout(() => api('/api/nowplaying', { action: 'vol:' + v }), 120);
+});
+document.querySelector('#npPill .pp-vol').addEventListener('wheel', (e) => {   // molette sur le haut-parleur de la pastille : ±5
+  e.preventDefault(); if (!npState || !(npState.vol >= 0)) return;
+  const v = Math.max(0, Math.min(100, (+npState.vol) + (e.deltaY < 0 ? 5 : -5)));
+  npState.vol = v; npVolT = Date.now(); npVolShow(v); document.querySelector('#npPill .pp-vol small').textContent = v;
+  clearTimeout(npVolSend); npVolSend = setTimeout(() => api('/api/nowplaying', { action: 'vol:' + v }), 120);
+}, { passive: false });
+document.querySelector('#np .np-vol input').addEventListener('wheel', (e) => {   // molette sur le curseur : ±5
+  e.preventDefault(); const r = e.target, v = Math.max(0, Math.min(100, +r.value + (e.deltaY < 0 ? 5 : -5)));
+  r.value = v; r.dispatchEvent(new Event('input'));
+}, { passive: false });
+function npPoll() {
+  if (document.hidden || (document.body.classList.contains('pageopen') && !document.getElementById('mixpop'))) return;
+  fetch('/api/nowplaying?' + tokq()).then(r => r.json()).then(npRender).catch(() => {});
+}
+function npCmd(action) {
+  if (action === 'toggle' && npState) {   // réponse immédiate à l'écran, gardée le temps que Windows suive
+    npState.playing = !npState.playing; npHoldPlaying = npState.playing; npHold = Date.now() + 2000; npRender(npState); }
+  if ((action === 'next' || action === 'prev') && npState) { npHoldPlaying = true; npHold = Date.now() + 2000; }
+  api('/api/nowplaying', { action }).then(() => { setTimeout(npPoll, 350); setTimeout(npPoll, 1100); });
+}
+document.querySelector('#np .np-bar').addEventListener('click', (e) => {
+  if (!npState || !npState.dur) return;
+  const r = e.currentTarget.getBoundingClientRect(), t = (e.clientX - r.left) / r.width * npState.dur;
+  npState.pos = t; npRender(npState); npCmd('seek:' + t.toFixed(1));
+});
+setInterval(npPoll, 1000); setTimeout(npPoll, 300);
+// ---- mélangeur de son : volume général + chaque appli qui a un son ouvert (mêmes réglages que le mélangeur Windows)
+let npMix = null;
+const MX_SPK = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 9.5a3.5 3.5 0 0 1 0 5"/></svg>';
+const MX_OFF = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>';
+const mxBusy = {};   // curseur en cours de réglage : on ne le remet pas à jour sous le doigt
+function toggleMixer(force) {
+  let pop = document.getElementById('mixpop');
+  if (pop && force !== true) { pop.remove(); document.getElementById('btnMix').classList.remove('on'); return; }
+  document.getElementById('modepop')?.remove(); document.getElementById('btnModes').classList.remove('on');
+  if (!pop) { pop = el('div', { id: 'mixpop' }); document.body.appendChild(pop); }
+  pop.style.top = (document.getElementById('topctl').getBoundingClientRect().bottom + 8) + 'px';
+  document.getElementById('btnMix').classList.add('on');
+  pop.replaceChildren(el('div', { className: 'mx-h' }, el('span', { textContent: 'SON' }), el('small', { textContent: 'chaque curseur ne règle que son appli' })),
+    el('div', { className: 'mx-rows' }));
+  mixRender(); npPoll();
+}
+function mxRow(key, name, master) {
+  const row = el('div', { className: 'mx-row' + (master ? ' master' : '') });
+  row.dataset.k = key;
+  const mute = el('button', { className: 'mx-mute', title: 'Couper / remettre le son' });
+  const r = el('input', { className: 'mx-range', type: 'range', min: 0, max: 100, step: 1 });
+  r.title = master ? 'Volume général du PC' : 'Volume de ' + name;
+  const val = el('span');
+  const send = (v) => api('/api/nowplaying', { action: master ? 'mastervol:' + v : 'appvol:' + key + ':' + v });
+  let t = 0;
+  r.addEventListener('input', () => { mxBusy[key] = Date.now(); r.style.setProperty('--v', r.value + '%'); val.textContent = r.value;
+    clearTimeout(t); t = setTimeout(() => send(r.value), 90); });
+  r.addEventListener('wheel', (e) => { e.preventDefault(); r.value = Math.max(0, Math.min(100, +r.value + (e.deltaY < 0 ? 5 : -5))); r.dispatchEvent(new Event('input')); }, { passive: false });
+  mute.onclick = () => { mxBusy[key] = Date.now(); row.classList.toggle('muted');
+    mute.innerHTML = row.classList.contains('muted') ? MX_OFF : MX_SPK;
+    api('/api/nowplaying', { action: master ? 'mastermute' : 'appmute:' + key }); };
+  row.append(mute, el('b', { textContent: name, title: name }), r, val);
+  return row;
+}
+function mixRender() {
+  const box = document.querySelector('#mixpop .mx-rows'); if (!box) return;
+  const m = npMix;
+  if (!m || m.master < 0) { if (!box.children.length) box.replaceChildren(el('div', { className: 'mx-row', textContent: 'Lecture du son…' })); return; }
+  const want = [['__master', 'Général', m.master, m.muted, true], ...(m.apps || []).map(a => [a.exe, a.name, a.vol, a.muted, false])];
+  const keys = want.map(w => w[0]).join(',');
+  if (box.dataset.keys !== keys) {   // applis apparues / disparues : on refait la liste
+    box.dataset.keys = keys;
+    box.replaceChildren(...want.map(([k, n, , , ms]) => mxRow(k, n, ms)));
+  }
+  want.forEach(([k, , v, mu]) => {
+    const row = box.querySelector(`.mx-row[data-k="${CSS.escape(k)}"]`); if (!row || Date.now() - (mxBusy[k] || 0) < 2500) return;
+    const r = row.querySelector('input'); r.value = v; r.style.setProperty('--v', v + '%'); row.querySelector('span').textContent = v;
+    row.classList.toggle('muted', !!mu); row.querySelector('.mx-mute').innerHTML = mu ? MX_OFF : MX_SPK;
+  });
+}
+addEventListener('pointerdown', (e) => { const p = document.getElementById('mixpop');
+  if (p && !p.contains(e.target) && !e.target.closest('#btnMix, .pp-vol')) { p.remove(); document.getElementById('btnMix').classList.remove('on'); } });
+function toggleModes(force) {
+  let pop = document.getElementById('modepop');
+  const mb = document.getElementById('btnModes');
+  if (pop && force !== true) { pop.remove(); mb.classList.remove('on'); return; }
+  mb.classList.add('on');
+  if (!pop) { pop = el('div', { id: 'modepop' }); document.body.appendChild(pop); }
+  pop.style.top = (document.getElementById('topctl').getBoundingClientRect().bottom + 8) + 'px';
+  pop.replaceChildren(el('div', { className: 'mp-h', textContent: 'MODES' }), el('div', { className: 'mp-msg', textContent: 'Chargement…' }));
+  fetch('/api/modes?' + tokq()).then(r => r.json()).then(d => {
+    const list = el('div', { className: 'mp-list' });
+    for (const m of d.modes || []) {
+      const card = el('button', { className: 'mp-card' }, el('b', { textContent: 'Mode ' + m.name }), el('span', { textContent: m.description || '' }));
+      card.onclick = () => {
+        if (!m.game || (d.running || []).length) return runMode(m.name, '', pop);
+        // mode jeu : quel jeu lancer ?
+        const games = el('div', { className: 'mp-games' }, ...[...(d.games || []).map(g => {
+          const b = el('button', { className: 'mp-game', textContent: g }); b.onclick = () => runMode(m.name, g, pop); return b; }),
+          (() => { const b = el('button', { className: 'mp-game off', textContent: 'Sans lancer de jeu' }); b.onclick = () => runMode(m.name, '', pop); return b; })()]);
+        pop.replaceChildren(el('div', { className: 'mp-h', textContent: 'MODE ' + m.name.toUpperCase() + ' · QUEL JEU ?' }), games);
+      };
+      list.appendChild(card);
+    }
+    pop.replaceChildren(el('div', { className: 'mp-h', textContent: 'MODES' }), list);
+  }).catch(() => { pop.querySelector('.mp-msg').textContent = 'JARVIS ne répond pas.'; });
+}
+function runMode(name, game, pop) {
+  api('/api/mode', { name, game }).then(r => {
+    pop.replaceChildren(el('div', { className: 'mp-h', textContent: r.ok ? 'MODE ' + name.toUpperCase() + ' ACTIVÉ' : (r.why || 'Impossible') }));
+    setTimeout(() => { pop.remove(); document.getElementById('btnModes').classList.remove('on'); }, 1600);
+  });
+}
+addEventListener('pointerdown', (e) => { const p = document.getElementById('modepop');
+  if (p && !p.contains(e.target) && !e.target.closest('#btnModes')) { p.remove(); document.getElementById('btnModes').classList.remove('on'); } });
+function toggleCamera() {   // l'onglet Caméra ouvre / ferme la fenêtre flottante (pas une page)
+  if (window.CAM3D && CAM3D.isOpen()) CAM3D.close(); else api('/api/cam/open', { mode: 'atelier' });
+  setTimeout(renderSide, 400);
+}
+function openPage(k) {
+  stopClips();
+  if (window.M3D && document.querySelector('#m3d.on')) M3D.close();   // un autre onglet : la visionneuse 3D se ferme
+  if (document.getElementById('dashov')) closeDash();                  // … et le tableau de bord aussi
+  pageTab = k; noteSel = null; pageKey = '';
+  if (k && window.closeGlobe) closeGlobe();
+  renderSide();
+  renderPage(true);
+}
+function pageShell(title, sub, body, split) {
+  const page = document.getElementById('page');
+  const n = TABS.findIndex(t => t[0] === pageTab) + 1;
+  page.replaceChildren(
+    el('div', { className: 'phead' },
+      el('div', {}, el('div', { className: 'code', textContent: `// MODULE ${String(n).padStart(2, '0')}` }), el('h2', { textContent: title })),
+      el('span', { className: 'sub', textContent: sub || '' }),
+      el('button', { className: 'cx', title: 'Fermer (Échap)', textContent: '✕', on: { click: () => openPage(null) } })),
+    el('div', { className: 'ticks' }),
+    el('div', { className: 'pbody' + (split ? ' split' : '') }, ...body), ...corners());
+}
+
+function renderPage(force) {
+  const page = document.getElementById('page');
+  page.classList.toggle('open', !!pageTab);
+  updPageOpen();
+  if (!pageTab || !DASH) return;
+  const d = DASH, k = pageTab;
+  // pas de redessin (ni de retour en haut) si rien n'a changé pour cette page
+  const key = k + JSON.stringify(k === 'agenda' ? d.agenda : k === 'rappels' ? d.reminders : k === 'notes' ? d.notes
+                                  : k === 'pcradar' ? d.pcradar : k === 'apis' ? 1 : k === 'clips' ? d.clips : d.mails);
+  if (!force && key === pageKey) return;
+  pageKey = key;
+  if (k === 'apis') {  // la page des API (apis.html) s'affiche dans le panneau ; jamais redessinée (garde ce qu'on écrit)
+    pageShell('API', 'Services que JARVIS peut utiliser', [el('iframe', { src: '/apis', title: 'Connecteurs API',
+      style: 'width:100%;height:100%;min-height:62vh;border:0;background:#02060b' })]);
+    return;
+  }
+  if (k === 'deck') {  // grille de gros boutons (dash.html?deck=1) : se tient à jour elle-même, jamais redessinée
+    if (!force && document.getElementById('deckf')) return;
+    pageShell('Deck', 'Stream, JARVIS, musique et raccourcis en un appui', [el('iframe', { id: 'deckf', src: '/dash?deck=1', title: 'Deck',
+      style: 'width:100%;height:100%;min-height:62vh;border:0;background:transparent' })]);
+    return;
+  }
+  if (k === 'agents') {  // page qui se tient à jour elle-même (toutes les secondes)
+    if (!force && document.querySelector('.ag')) return;
+    renderAgents(); return;
+  }
+  if (k === 'imprimante') {  // page qui se tient à jour elle-même (état toutes les 3 s) : jamais redessinée par le tableau
+    if (!force && document.getElementById('prn')) return;
+    renderPrinter(); return;
+  }
+  if (k === 'clips') {  // nouveau clip pendant qu'on en regarde un : on ne coupe pas la lecture en cours
+    if (!force && [...document.querySelectorAll('#page video')].some(v => !v.paused)) return;
+    stopClips(); renderClips(); return;
+  }
+  if (k === 'agenda') {
+    const a = d.agenda;
+    pageShell('Agenda', 'Les 7 prochains jours', !a ? [sempty('Chargement…')] : !a.ok ? [sempty(a.why)]
+      : a.events.length ? grouped(a.events, e => e.day, e => sitem(e.time, e.title, e.where, e.past ? 'past' : ''))
+      : [sempty('Rien de prévu cette semaine.')]);
+  } else if (k === 'rappels') {
+    pageShell('Rappels', 'Dis « Jarvis, rappelle-moi… » pour en ajouter',
+      d.reminders.length ? grouped(d.reminders, r => r.day, r => sitem(r.time, (r.routine ? '⟳ ' : '') + r.text,
+        [r.routine ? 'routine' : '', r.repeat ? 'répété' : ''].filter(Boolean).join(' · ')))
+      : [sempty('Aucun rappel programmé.')]);
+  } else if (k === 'notes') {
+    if (!d.notes.length) { pageShell('Notes', 'Dis « Jarvis, prends une note »', [sempty('Aucune note pour le moment.')]); return; }
+    const view = el('div', { className: 'nview mdc' });
+    const list = el('div', { className: 'nlist' }, ...d.notes.map(n => {
+      const row = sitem(n.date, n.title, n.excerpt);
+      row.onclick = () => { noteSel = n.file; list.querySelectorAll('.si').forEach(r => r.classList.toggle('on', r === row)); showNote(n.file, view); };
+      if (n.file === noteSel) row.classList.add('on');
+      return row;
+    }));
+    pageShell('Notes', `${d.notes.length} note${d.notes.length > 1 ? 's' : ''} · Documents › Notes Jarvis`,
+      [el('div', { className: 'ncols' }, list, view)], true);
+    if (!noteSel || !d.notes.some(n => n.file === noteSel)) {
+      noteSel = d.notes[0].file;
+      list.firstChild.classList.add('on');
+    }
+    showNote(noteSel, view);
+  } else if (k === 'pcradar') {
+    const p = d.pcradar;
+    if (!p || !p.ok) { pageShell('PC Radar', '', [sempty(p ? p.why : 'Chargement…')]); return; }
+    const kpi = (v, l, warn) => el('div', { className: 'kpi' + (warn && v ? ' warn' : '') }, el('b', { textContent: fmt(v) }), el('span', { textContent: l }));
+    const days = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'], wk = p.week || [];
+    const labels = wk.map((_, i) => days[(new Date().getDay() - (wk.length - 1 - i) + 70) % 7]);
+    const chart = el('div'); chart.innerHTML = '<h3 style="margin-top:0">Visiteurs · 7 jours</h3>' + chartSvg({ labels, values: wk });
+    chart.className = 'mdc';
+    const report = el('div', { className: 'mdc', textContent: 'Chargement du rapport complet…' });
+    pageShell('PC Radar', 'pcradar.tech', [el('div', { className: 'kpis' },
+      kpi(p.today, `visiteurs aujourd’hui (hier ${fmt(p.yesterday)})`), kpi(p.tickets, 'tickets à traiter', true),
+      kpi(p.suspects, 'prix suspects', true), kpi(p.isolees, 'annonces à rattacher', true), kpi(p.retard, 'prix en retard', true)),
+      chart, report]);
+    fetch('/api/dashboard/pcradar?token=' + encodeURIComponent(window.JTOKEN)).then(r => r.json())
+      .then(r => { report.innerHTML = md(r.md || ''); }).catch(() => { report.textContent = 'Rapport indisponible pour le moment.'; });
+  } else {
+    const m = d.mails;
+    if (!m || !m.ok) { pageShell('Mails', '', [sempty(m ? m.why : 'Chargement…')]); return; }
+    const body = [];
+    for (const b of m.boxes) {
+      body.push(el('div', { className: 'sday', textContent: `${b.label} · ${b.count === null ? 'indisponible' : b.count.toLocaleString('fr-FR') + ' non lu' + (b.count > 1 ? 's' : '')}` }));
+      if (b.count && !b.last.length) body.push(sempty('—'));
+      for (const x of b.last) body.push(sitem('✉', x.from, x.subject));
+    }
+    pageShell('Mails non lus', 'Les 10 derniers par boîte · « Jarvis, lis-moi mes mails »', body);
+  }
+}
+// ------------------------------------------------------------------ page Clips : regarder, ouvrir le dossier, supprimer
+let clipSel = null;
+const tokq = () => 'token=' + encodeURIComponent(window.JTOKEN);
+const clipUrl = (id) => '/api/clips/file?id=' + encodeURIComponent(id) + '&' + tokq();
+const clipLite = (id) => clipUrl(id) + '&lite=1';   // copie légère déjà prête (démarrage immédiat), sinon l'original
+function clipPost(path, id) {
+  return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: window.JTOKEN, id }) }).then(r => r.json());
+}
+function renderClips() {
+  pageShell('Clips', 'Chargement…', [sempty('Chargement des clips…')]);
+  fetch('/api/clips?' + tokq()).then(r => r.json()).then(r => {
+    if (pageTab !== 'clips') return;
+    const clips = r.clips || [];
+    const sub = `${clips.length} vidéo${clips.length > 1 ? 's' : ''} · « OK Jarvis, clip » ou Ctrl+Maj+S en jeu`;
+    if (!clips.length) { pageShell('Clips', sub, [sempty('Aucun clip pour le moment.')]); return; }
+    if (!clipSel || !clips.some(c => c.id === clipSel)) clipSel = clips[0].id;
+    const player = el('video', { className: 'cplayer', controls: true, preload: 'none' });
+    const title = el('div', { className: 'ctitle' });
+    const del = el('button', { className: 'btn danger', textContent: 'Supprimer' });
+    const show = el('button', { className: 'btn', textContent: 'Voir dans le dossier' });
+    const viewer = el('div', { className: 'cview' }, player,
+      el('div', { className: 'cbar' }, title, el('div', { style: 'flex:1' }), show, del));
+    const grid = el('div', { className: 'cgrid' });
+    function select(c, play) {
+      clipSel = c.id;
+      grid.querySelectorAll('.ccard').forEach(x => x.classList.toggle('on', x.dataset.id === c.id));
+      player.poster = '/api/clips/thumb?id=' + encodeURIComponent(c.id) + '&' + tokq();
+      player.src = clipLite(c.id);
+      if (play) player.play().catch(() => {});
+      title.replaceChildren(el('b', { textContent: c.name }), el('small', { textContent: `${c.date} · ${c.mb} Mo · ${c.folder}` }));
+      del.textContent = 'Supprimer'; del.dataset.armed = '';
+      del.onclick = () => {  // deux clics pour confirmer ; le clip part à la corbeille (récupérable)
+        if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = 'Confirmer : à la corbeille'; return; }
+        player.removeAttribute('src'); player.load();
+        clipPost('/api/clips/delete', c.id).then(x => {
+          if (!x.ok) { del.textContent = x.why || 'Impossible'; return; }
+          clipSel = null; renderClips();
+        });
+      };
+      show.onclick = () => clipPost('/api/clips/show', c.id);
+    }
+    for (const c of clips) {
+      // vignette JPEG (fabriquée par JARVIS) au lieu d'une vidéo par clip : 30 vidéos à charger faisaient bugger la page
+      const thumb = el('img', { className: 'cthumb', alt: '', decoding: 'async' });
+      let tries = 0; const tsrc = '/api/clips/thumb?id=' + encodeURIComponent(c.id) + '&' + tokq();
+      thumb.onerror = () => { if (++tries < 40) setTimeout(() => { thumb.src = tsrc + '&t=' + tries; }, 1500); };
+      thumb.src = tsrc;
+      const card = el('div', { className: 'ccard', on: { click: () => select(c, true) } }, thumb,
+        el('div', { className: 'cname', textContent: c.name }), el('small', { textContent: `${c.date} · ${c.mb} Mo` }));
+      card.dataset.id = c.id;
+      grid.append(card);
+    }
+    pageShell('Clips', sub, [viewer, grid]);
+    select(clips.find(c => c.id === clipSel), false);
+  }).catch(() => pageShell('Clips', '', [sempty('Clips indisponibles pour le moment.')]));
+}
+
+
+// ------------------------------------------------------------------ page Imprimante 3D : état, commandes, fichiers
+// ---- page Agents IA : grand arbre animé façon JARVIS (patron en haut, spécialistes, outils en feuilles), données qui
+// circulent en points lumineux le long des branches ; fil d'activité en dessous ----
+const AG_ICONS = {
+  crown: 'M3 8l4.5 4L12 5l4.5 7L21 8l-2 10H5zM5 21h14',
+  printer: 'M5 3h14v3H5zM3 6h18v4H3zM7 10v5M17 10v5M9 13h6l-1 4h-4z',
+  radar: 'M12 3a9 9 0 1 0 .01 0zM12 7a5 5 0 1 0 .01 0zM12 12l6-6',
+  mail: 'M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 7l9 6 9-6',
+  search: 'M10.5 4a6.5 6.5 0 1 0 .01 0zM15.5 15.5L21 21',
+  chip: 'M8 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4',
+  film: 'M4 5h16v14H4zM4 9h16M4 15h16M8 5v4M12 5v4M16 5v4M8 15v4M12 15v4M16 15v4',
+};
+const AG_TOOL = { imprimante: 'Imprimante', modeles_3d: 'Modèles 3D', web_search: 'Web', wikipedia: 'Wikipédia',
+  pcradar_report: 'Rapport', pcradar_ticket_details: 'Tickets', releve_prix: 'Relevé prix', check_website: 'Site',
+  check_emails: 'Boîtes mail', read_email: 'Lecture', search_emails: 'Recherche', agenda: 'Agenda', list_reminders: 'Rappels',
+  news_headlines: 'Actus', youtube_search: 'YouTube', convert_currency: 'Devises', get_weather: 'Météo',
+  system_status: 'Système', diagnose_pc: 'Diagnostic', etat_systeme: 'JARVIS', find_files: 'Fichiers',
+  search_file_contents: 'Contenus', list_windows: 'Fenêtres', check_virustotal: 'VirusTotal',
+  resume_jeu: 'Parties', best_of_semaine: 'Best-of', clip_to_phone: 'Téléphone' };
+const AG_STATUS = { attente: 'En file', en_cours: 'Au travail', fini: 'Terminé', a_confirmer: 'À confirmer', erreur: 'Erreur' };
+let AG = null, agTimer = 0, agRaf = 0, agKey = '', agOpen = {};
+const agColor = (k) => ((AG && AG.agents.find(a => a.key === k)) || {}).color || '#00d2ff';
+const agName = (k) => ((AG && AG.agents.find(a => a.key === k)) || {}).name || k;
+const agAgo = (t) => { const s = Math.max(0, Math.round((AG ? AG.now : Date.now() / 1000) - t)); return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min'; };
+function agPoll() { return fetch('/api/agents?' + tokq()).then(r => r.json()).then(d => { AG = d; return d; }).catch(() => null); }
+setInterval(() => { if (!document.hidden && pageTab !== 'agents') agPoll().then(() => renderSide()); }, 5000);
+setTimeout(() => agPoll().then(() => renderSide()), 1500);
+
+function agRgba(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+
+function agTree(canvas) {
+  const ctx = canvas.getContext('2d');
+  const paths = {}; for (const k in AG_ICONS) paths[k] = new Path2D(AG_ICONS[k]);
+  let W = 0, H = 0, dpr = 1, nodes = {}, edges = [], packets = [], dust = [], lastSpawn = 0, t0 = performance.now(), hover = '';
+  let FS = { name: 11, boss: 12.5, sub: 10, tool: 9.5 };
+  canvas.addEventListener('mousemove', (ev) => {   // survol d'un spécialiste (ou de ses outils) : noms des outils affichés
+    const r = canvas.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    hover = '';
+    for (const id in nodes) { const n = nodes[id]; if (n.kind === 'boss') continue;
+      if (Math.hypot(n.x - x, n.y - y) < (n.kind === 'agent' ? n.r * 2 : 14)) { hover = n.kind === 'agent' ? id : n.a.key; break; } }
+  });
+  canvas.addEventListener('mouseleave', () => { hover = ''; });
+  function layout() {
+    const r = canvas.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1);
+    W = r.width; H = r.height; canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    nodes = {}; edges = [];
+    const specs = AG.agents.filter(a => a.key !== 'patron'), boss = AG.agents.find(a => a.key === 'patron');
+    // petit écran (tablette) : textes plus grands, marges calculées pour que rien ne soit coupé
+    FS = W < 1150 || H < 420 ? { name: 12.5, boss: 14, sub: 11, tool: 10.5 } : { name: 11, boss: 12.5, sub: 10, tool: 9.5 };
+    ctx.font = `600 ${FS.name}px Bahnschrift, "Segoe UI", sans-serif`;
+    const nameW = Math.max(...specs.map(a => ctx.measureText(a.name.toUpperCase()).width + a.name.length * 3));
+    const bossR = Math.min(34, H * 0.075, W * 0.035), agentR = Math.min(22, H * 0.055);
+    nodes.patron = { x: W / 2, y: Math.max(H * 0.17, bossR * 2.2 + 16), r: bossR, a: boss, kind: 'boss' };
+    const m = Math.max(nameW / 2 + 14, W * 0.06), step = (W - 2 * m) / Math.max(1, specs.length - 1);
+    const zig = step < nameW + 12;   // noms trop larges pour une seule rangée : un agent sur deux un peu plus bas
+    specs.forEach((a, i) => {
+      const x = specs.length === 1 ? W / 2 : m + i * step, y = H * (zig ? (i % 2 ? 0.58 : 0.45) : 0.52);
+      nodes[a.key] = { x, y, r: agentR, a, kind: 'agent' };
+      edges.push({ from: 'patron', to: a.key, color: a.color });
+      const tools = a.tools || [], fan = Math.min(step * 0.46, 70);
+      tools.forEach((tn, j) => {
+        const f = tools.length === 1 ? 0 : (j / (tools.length - 1)) * 2 - 1;
+        const id = a.key + ':' + tn;
+        nodes[id] = { x: x + f * fan, y: H * (j % 2 ? 0.90 : 0.82) - Math.abs(f) * H * 0.02, r: 4.2, a, tool: tn, kind: 'tool' };
+        edges.push({ from: a.key, to: id, color: a.color });
+      });
+    });
+    dust = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - .5) * 6, vy: (Math.random() - .5) * 6, r: Math.random() * 1.2 + .3, a: Math.random() * .35 + .08 }));
+  }
+  const ctrl = (a, b) => [a.x, a.y + (b.y - a.y) * 0.55, b.x, b.y - (b.y - a.y) * 0.55];
+  function bez(e, t) {
+    const a = nodes[e.from], b = nodes[e.to], [c1x, c1y, c2x, c2y] = ctrl(a, b), u = 1 - t;
+    return [u * u * u * a.x + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * b.x,
+            u * u * u * a.y + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * b.y];
+  }
+  function spawn(e, back, strong) { packets.push({ e, t: 0, back, speed: strong ? 0.55 + Math.random() * .25 : 0.18, strong }); }
+  function frame(now) {
+    if (!canvas.isConnected) return;
+    agRaf = requestAnimationFrame(frame);
+    if (!AG) return;
+    const r = canvas.getBoundingClientRect();
+    if (Math.abs(r.width - W) > 2 || Math.abs(r.height - H) > 2 || !nodes.patron) layout();
+    const T = (now - t0) / 1000, dt = 1 / 60;
+    const busy = {}; AG.agents.forEach(a => { busy[a.key] = a; if (nodes[a.key]) nodes[a.key].a = a; });
+    ctx.clearRect(0, 0, W, H);
+    // fond : grille de points + halo derrière le patron + poussière qui dérive
+    ctx.fillStyle = 'rgba(0,180,255,.07)';
+    for (let x = 12; x < W; x += 22) for (let y = 12; y < H; y += 22) ctx.fillRect(x, y, 1.2, 1.2);
+    const P = nodes.patron, g = ctx.createRadialGradient(P.x, P.y, 0, P.x, P.y, H * 0.55);
+    g.addColorStop(0, 'rgba(0,170,255,.16)'); g.addColorStop(1, 'rgba(0,170,255,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    for (const d of dust) { d.x = (d.x + d.vx * dt + W) % W; d.y = (d.y + d.vy * dt + H) % H;
+      ctx.fillStyle = `rgba(120,210,255,${d.a})`; ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 6.283); ctx.fill(); }
+    // branches
+    for (const e of edges) {
+      const a = nodes[e.from], b = nodes[e.to], [c1x, c1y, c2x, c2y] = ctrl(a, b);
+      const agentKey = b.kind === 'agent' ? e.to : e.from, on = busy[agentKey] && busy[agentKey].busy;
+      const toolOn = b.kind === 'tool' && on && busy[agentKey].tool === b.tool;
+      ctx.strokeStyle = toolOn ? agRgba(e.color, .9) : on ? agRgba(e.color, .55) : 'rgba(0,200,255,.14)';
+      ctx.lineWidth = toolOn ? 2 : on ? 1.6 : 1; ctx.setLineDash(b.kind === 'tool' && !toolOn ? [2, 4] : []);
+      ctx.shadowColor = on ? e.color : 'transparent'; ctx.shadowBlur = on ? 8 : 0;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.bezierCurveTo(c1x, c1y, c2x, c2y, b.x, b.y); ctx.stroke();
+    }
+    ctx.setLineDash([]); ctx.shadowBlur = 0;
+    // points de données : flux soutenu sur les branches actives, quelques points au repos
+    if (now - lastSpawn > 140) {
+      lastSpawn = now;
+      for (const e of edges) {
+        const b = nodes[e.to], agentKey = b.kind === 'agent' ? e.to : e.from, a = busy[agentKey];
+        if (a && a.busy && (b.kind === 'agent' || a.tool === b.tool)) { if (Math.random() < .55) spawn(e, Math.random() < .4, true); }
+        else if (Math.random() < .012) spawn(e, Math.random() < .5, false);
+      }
+    }
+    packets = packets.filter(p => (p.t += p.speed * dt) < 1);
+    for (const p of packets) {
+      const [x, y] = bez(p.e, p.back ? 1 - p.t : p.t), c = p.e.color;
+      ctx.shadowColor = c; ctx.shadowBlur = p.strong ? 12 : 4;
+      ctx.fillStyle = p.strong ? '#ffffff' : agRgba(c, .7);
+      ctx.beginPath(); ctx.arc(x, y, p.strong ? 2.4 : 1.6, 0, 6.283); ctx.fill();
+      if (p.strong) { const [x2, y2] = bez(p.e, p.back ? 1 - p.t + .03 : p.t - .03); ctx.fillStyle = agRgba(c, .5);
+        ctx.beginPath(); ctx.arc(x2, y2, 1.6, 0, 6.283); ctx.fill(); }
+    }
+    ctx.shadowBlur = 0;
+    // nœuds
+    ctx.textAlign = 'center';
+    for (const id in nodes) {
+      const n = nodes[id], a = n.a, c = a.color || '#00d2ff', on = a.busy;
+      if (n.kind === 'tool') {
+        const lit = on && a.tool === n.tool;
+        ctx.fillStyle = lit ? '#fff' : agRgba(c, on ? .7 : .35); ctx.shadowColor = c; ctx.shadowBlur = lit ? 14 : 0;
+        ctx.beginPath(); ctx.arc(n.x, n.y, lit ? 5.5 : n.r, 0, 6.283); ctx.fill(); ctx.shadowBlur = 0;
+        if (lit || hover === a.key) {   // nom de l'outil : seulement celui qui travaille, ou au survol de son agent
+          ctx.font = `${lit ? 600 : 400} ${FS.tool}px "Cascadia Mono", Consolas, monospace`;
+          ctx.fillStyle = lit ? c : 'rgba(170,215,235,.8)';
+          ctx.fillText((AG_TOOL[n.tool] || n.tool).toUpperCase(), n.x, n.y + (n.y > H * 0.84 ? 16 : -10));
+        }
+        continue;
+      }
+      const R = n.r, pulse = on ? 1 + .06 * Math.sin(T * 6) : 1;
+      // anneaux en pointillés qui tournent (plus vite quand il travaille)
+      for (let k = 0; k < (n.kind === 'boss' ? 3 : 2); k++) {
+        const rr = R * (1.35 + k * .32) * pulse, seg = n.kind === 'boss' ? 36 + k * 12 : 24;
+        ctx.save(); ctx.translate(n.x, n.y); ctx.rotate(T * (on ? 1.6 : .25) * (k % 2 ? -1 : 1) + k);
+        ctx.fillStyle = agRgba(c, on ? .85 - k * .2 : .35 - k * .08);
+        for (let s = 0; s < seg; s++) { if (s % 6 === 5) continue; const an = s / seg * 6.283;
+          ctx.beginPath(); ctx.arc(Math.cos(an) * rr, Math.sin(an) * rr, n.kind === 'boss' ? 1.4 : 1.1, 0, 6.283); ctx.fill(); }
+        ctx.restore();
+      }
+      const gg = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, R * 1.2);
+      gg.addColorStop(0, agRgba(c, on ? .45 : .2)); gg.addColorStop(1, 'rgba(2,10,18,.95)');
+      ctx.fillStyle = gg; ctx.shadowColor = c; ctx.shadowBlur = on ? 26 : 10;
+      ctx.beginPath(); ctx.arc(n.x, n.y, R, 0, 6.283); ctx.fill();
+      ctx.lineWidth = n.kind === 'boss' ? 2 : 1.5; ctx.strokeStyle = agRgba(c, on ? 1 : .7); ctx.stroke(); ctx.shadowBlur = 0;
+      // icône
+      const sc = R * 1.05 / 24;
+      ctx.save(); ctx.translate(n.x - 12 * sc, n.y - 12 * sc); ctx.scale(sc, sc);
+      ctx.strokeStyle = on ? '#fff' : c; ctx.lineWidth = 1.7; ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.stroke(paths[a.icon] || paths.crown); ctx.restore();
+      // nom + ce qu'il fait
+      ctx.font = `600 ${n.kind === 'boss' ? FS.boss : FS.name}px Bahnschrift, "Segoe UI", sans-serif`;
+      ctx.fillStyle = '#e8f6ff'; ctx.letterSpacing = '3px';
+      ctx.fillText(a.name.toUpperCase(), n.x, n.y + R * 1.95 + 8);
+      ctx.letterSpacing = '0px';
+      ctx.font = `${FS.sub}px "Cascadia Mono", Consolas, monospace`;
+      ctx.fillStyle = on ? c : 'rgba(140,190,215,.55)';
+      const sub = on ? (a.current || 'Au travail') : (n.kind === 'boss' ? 'En attente d’une tâche' : 'Disponible');
+      ctx.fillText(sub.length > 34 ? sub.slice(0, 33) + '…' : sub, n.x, n.y + R * 1.95 + 22);
+    }
+  }
+  layout(); cancelAnimationFrame(agRaf); agRaf = requestAnimationFrame(frame);
+  canvas.addEventListener('click', (ev) => {   // clic sur un spécialiste : il est présélectionné pour la prochaine tâche
+    const r = canvas.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    for (const id in nodes) { const n = nodes[id]; if (n.kind === 'agent' && Math.hypot(n.x - x, n.y - y) < n.r * 1.8) canvas.onpick && canvas.onpick(id); }
+  });
+}
+
+function renderAgents() {
+  clearInterval(agTimer); cancelAnimationFrame(agRaf);
+  const canvas = el('canvas', { className: 'ag-tree' });
+  const jobs = el('div', { className: 'ag-jobs' });
+  // missions automatiques : liste + ajout (tâche, jours, heure) + suppression
+  const auto = el('div', { className: 'ag-auto' });
+  function loadMissions() {
+    fetch('/api/missions?' + tokq()).then(r => r.json()).then(d => {
+      const DAYS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+      const rows = (d.missions || []).map((m, i) => el('div', { className: 'ag-mis' },
+        el('b', { textContent: m.heure }), el('span', { className: 'd', textContent: m.jours.length === 7 ? 'tous les jours' : m.jours.map(x => DAYS[x]).join(' · ') }),
+        el('span', { className: 't', textContent: m.tache, title: m.tache }),
+        el('button', { className: 'x', title: 'Supprimer cette mission', textContent: '✕', on: { click: () =>
+          api('/api/missions', { action: 'supprime', numero: String(i + 1) }).then(loadMissions) } })));
+      const t = el('input', { type: 'text', placeholder: 'Nouvelle mission automatique…', title: 'Ex. « trie mes mails et dis-moi l’important »' });
+      const q = el('select', {}, ...[['chaque jour', 'Chaque jour'], ['en semaine', 'En semaine'], ['week-end', 'Le week-end'],
+        ...['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'].map(x => ['chaque ' + x, 'Le ' + x])].map(([v, l]) => el('option', { value: v, textContent: l })));
+      const h = el('input', { type: 'time', value: '08:00' });
+      const add = el('button', { className: 'ag-send', textContent: 'PLANIFIER', on: { click: () => { if (!t.value.trim()) return;
+        api('/api/missions', { action: 'ajoute', tache: t.value.trim(), quand: q.value + ' à ' + h.value.replace(':', ' h ') }).then(loadMissions); } } });
+      auto.replaceChildren(...(rows.length ? rows : [el('div', { className: 'ag-empty', textContent: 'Aucune mission automatique pour l’instant.' })]),
+        el('div', { className: 'ag-ask ag-plan' }, el('span', { className: 'ag-prompt', textContent: '⟳' }), t, q, h, add));
+    }).catch(() => {});
+  }
+  const inp = el('input', { type: 'text', placeholder: 'Confie une mission à l’équipe…', title: 'Ex. « fais le point complet sur PC Radar »' });
+  const sel = el('select', { title: 'Qui doit travailler ?' }, el('option', { value: '', textContent: 'Le patron choisit' }));
+  const send = el('button', { className: 'ag-send', textContent: 'LANCER' });
+  const go = () => { const t = inp.value.trim(); if (!t) return; inp.value = '';
+    api('/api/agents/task', { tache: t, agents: sel.value }).then(() => setTimeout(tick, 300)); };
+  send.onclick = go; inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  canvas.onpick = (k) => { sel.value = k; inp.focus(); };
+  pageShell('Agents IA', 'Réseau d’agents · un patron, cinq spécialistes', [el('div', { className: 'ag' },
+    el('div', { className: "ag-stage hudbox" }, canvas, ...corners()),
+    el('div', { className: 'ag-ask' }, el('span', { className: 'ag-prompt', textContent: '›' }), inp, sel, send),
+    el('div', { className: 'ag-h' }, el('span', { textContent: 'MISSIONS AUTOMATIQUES' })), auto,
+    el('div', { className: 'ag-h' }, el('span', { textContent: 'JOURNAL DES MISSIONS' })), jobs)]);
+  loadMissions();
+  let started = false;
+  function jobCard(j, sub) {
+    const c = agColor(j.agent), live = j.status === 'en_cours' || j.status === 'attente';
+    const open = agOpen[j.id] ?? live;
+    const card = el('div', { className: 'ag-job' + (sub ? ' sub' : '') + (live ? ' live' : '') }); card.style.setProperty('--c', c);
+    const dur = j.end ? `${Math.round(j.end - j.start)} s` : agAgo(j.start);
+    const top = el('div', { className: 'top' }, el('i', { className: 'dot' }), el('b', { textContent: agName(j.agent) }),
+      el('span', { className: 't', textContent: j.task, title: j.task }), el('span', { className: 'tm', textContent: dur }),
+      el('span', { className: 'ag-pill ' + j.status, textContent: AG_STATUS[j.status] || j.status }));
+    top.onclick = () => { agOpen[j.id] = !open; agKey = ''; tick(); };
+    card.append(top);
+    if (open && j.steps.length) card.append(el('div', { className: 'ag-steps' }, ...j.steps.slice(-6).map(s => el('div', { className: s.kind, textContent: s.text }))));
+    if (j.result && (!sub || open)) card.append(el('div', { className: 'ag-res' + (open ? '' : ' short'), textContent: j.result }));
+    return card;
+  }
+  function drawJobs() {
+    const bosses = AG.jobs.filter(j => j.agent === 'patron').slice(0, 10);
+    if (!bosses.length) { jobs.replaceChildren(el('div', { className: 'ag-empty', textContent: 'Aucune mission pour l’instant. Écris-en une ci-dessus, ou dis à JARVIS : « confie à l’équipe… ».' })); return; }
+    jobs.replaceChildren(...bosses.map(b => { const card = jobCard(b, false);
+      const kids = AG.jobs.filter(j => j.parent === b.id).reverse();
+      if (kids.length) card.append(el('div', { className: 'ag-sub' }, ...kids.map(k => jobCard(k, true))));
+      return card; }));
+  }
+  async function tick() {
+    if (pageTab !== 'agents' || !document.querySelector('.ag')) { clearInterval(agTimer); cancelAnimationFrame(agRaf); return; }
+    const d = await agPoll(); if (!d) return;
+    if (!started) { started = true; agTree(canvas); d.agents.filter(a => a.key !== 'patron').forEach(a => sel.append(el('option', { value: a.key, textContent: a.name }))); }
+    const live = d.jobs.some(j => j.status === 'en_cours' || j.status === 'attente') ? Math.floor(d.now) : 0;
+    const key = JSON.stringify([d.jobs.map(j => [j.id, j.status, j.steps.length, j.result.length]), agOpen, live]);
+    if (key === agKey) return;
+    agKey = key; drawJobs();
+  }
+  tick(); agTimer = setInterval(tick, 1000);
+}
+let prnTimer = 0;
+const prnPost = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(Object.assign({ token: window.JTOKEN }, body)) }).then(r => r.json());
+// bouton à deux clics : le 1er arme (texte de confirmation), le 2e agit ; se désarme seul au bout de 5 s
+function twoClick(btn, label, confirmLabel, fn) {
+  btn.textContent = label;
+  btn.onclick = () => {
+    if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = confirmLabel; btn.classList.add('armed');
+      clearTimeout(btn._t); btn._t = setTimeout(() => { btn.dataset.armed = ''; btn.textContent = label; btn.classList.remove('armed'); }, 5000); return; }
+    btn.dataset.armed = ''; btn.classList.remove('armed'); clearTimeout(btn._t); fn();
+  };
+}
+function renderPrinter() {
+  clearInterval(prnTimer);
+  const stat = el('div', { className: 'prn-stat' }), bar = el('div', { className: 'prn-bar' }, el('i')), ctl = el('div', { className: 'prn-ctl' });
+  const msg = el('div', { className: 'prn-msg' }), files = el('div', { className: 'prn-files' });
+  const pick = el('input', { type: 'file', multiple: true, accept: '.stl,.3mf,.obj,.gcode', style: 'display:none' });
+  const drop = el('div', { className: 'prn-drop', textContent: 'Glisse ici un fichier STL, 3MF, OBJ ou G-code (ou clique pour en choisir un)' });
+  const live = el('div', { className: 'prn-live', style: 'display:none' });   // vue 3D en direct de l'impression
+  pageShell('Imprimante 3D', 'Creality Ender 3 · PLA · USB', [el('div', { id: 'prn', className: 'prn' }, stat, bar, live, ctl, msg,
+    el('button', { className: 'btn main prn-plate', on: { click: () => window.M3D && M3D.open(null, '') } },
+      el('b', { textContent: 'PLATEAU 3D' }), el('span', { textContent: 'Ouvre un plateau vide et ajoute tes fichiers STL pour les imprimer ensemble' })),
+    el('div', { className: 'prn-h' }, el('span', { textContent: 'Fichiers' }),
+      el('button', { className: 'btn', textContent: 'Ouvrir le dossier', on: { click: () => prnPost('/api/print/cmd', { action: 'folder' }) } })),
+    drop, pick, files)]);
+  const say = (t, bad) => { msg.textContent = t || ''; msg.classList.toggle('bad', !!bad); };
+  let lastKey = '';
+  async function status() {
+    if (pageTab !== 'imprimante' || !document.getElementById('prn')) { clearInterval(prnTimer); return; }
+    let s; try { s = await fetch('/api/print/status?' + tokq()).then(r => r.json()); } catch (e) { return; }
+    const busy = s.job_state === 'printing' || s.job_state === 'paused', t = busy ? (s.temps || {}) : s;
+    const temp = (v, c) => v == null ? '–' : `${Math.round(v)} °C` + (c ? ` → ${Math.round(c)} °C` : '');
+    // tant que la buse ou le plateau n'ont pas atteint leur température, l'imprimante ne fait que chauffer et se mettre en
+    // place (mise à l'origine à 150 °C pour ne pas baver) : elle n'extrude rien avant
+    const heating = busy && t.buse_cible && (t.buse < t.buse_cible - 3 || t.plateau < t.plateau_cible - 2);
+    if (s.lecture) setTimeout(status, 1200);   // toute première lecture : les températures arrivent dans une seconde
+    const stateTxt = !s.ok ? (s.why || 'Imprimante injoignable') : s.lecture ? 'Lecture de l’imprimante…' : heating ? 'Chauffe avant impression' : s.job_state === 'printing' ? 'Impression en cours' : s.job_state === 'paused' ? 'En pause'
+      : s.chauffe ? 'Chauffe' : 'Prête';
+    stat.replaceChildren(
+      el('div', { className: 'prn-tile' + (!s.ok ? ' bad' : '') }, el('small', { textContent: 'ÉTAT' }), el('b', { textContent: stateTxt }),
+        el('span', { textContent: busy ? (s.job_name || '') : (s.last ? 'Dernière : ' + s.last : '') })),
+      el('div', { className: 'prn-tile' }, el('small', { textContent: 'BUSE' }), el('b', { textContent: temp(t.buse, t.buse_cible) })),
+      el('div', { className: 'prn-tile' }, el('small', { textContent: 'PLATEAU' }), el('b', { textContent: temp(t.plateau, t.plateau_cible) })),
+      el('div', { className: 'prn-tile' }, el('small', { textContent: 'AVANCEMENT' }), el('b', { textContent: busy ? s.pct + ' %' : '–' }),
+        el('span', { textContent: busy ? (s.progress || '').replace(/^[^:]*:\s*/, '') : '' })));
+    bar.style.display = busy ? '' : 'none'; bar.firstChild.style.width = (s.pct || 0) + '%';
+    const showLive = s.ok && s.job_state && s.job_state !== 'idle';
+    live.style.display = showLive ? '' : 'none';
+    if (showLive && window.LIVE3D) LIVE3D.mount(live);
+    const key = [s.ok, s.job_state, !!s.chauffe].join('|');
+    if (key === lastKey) return;
+    lastKey = key;
+    const b = (label, cls) => el('button', { className: 'btn' + (cls ? ' ' + cls : ''), textContent: label });
+    const act = (a, ok) => prnPost('/api/print/cmd', { action: a }).then(r => { say(r.ok ? ok : (r.why || 'Impossible'), !r.ok); lastKey = ''; status(); });
+    const kids = [];
+    if (s.job_state === 'printing') { const p = b('Pause'); p.onclick = () => act('pause', 'Impression en pause.'); kids.push(p); }
+    if (s.job_state === 'paused') { const p = b('Reprendre', 'main'); p.onclick = () => act('resume', 'Impression reprise.'); kids.push(p); }
+    if (busy) { const c = b('', 'del'); twoClick(c, 'Annuler l’impression', 'Confirmer : annuler', () => act('cancel', 'Annulation : la buse remonte, chauffage coupé.')); kids.push(c); }
+    if (!busy && s.ok) {
+      const h = b(''); twoClick(h, 'Préchauffer PLA (200 / 60 °C)', 'Confirmer : je reste à côté', () => act('preheat', 'Préchauffage lancé (extinction automatique dans 15 min).')); kids.push(h);
+      const c = b('Couper le chauffage'); c.onclick = () => act('cool', 'Chauffage coupé.'); kids.push(c);
+      const o = b('Ramener la buse au départ'); o.onclick = () => act('home', 'La buse revient à sa position de départ.'); kids.push(o);
+      const pw = b('Tester l’alimentation'); pw.onclick = () => { say('Test en cours (une douzaine de secondes)…');
+        prnPost('/api/print/cmd', { action: 'power' }).then(r => say(r.ok ? r.message : (r.why || 'Imprimante injoignable'), !r.ok || !r.powered)); }; kids.push(pw);
+    }
+    ctl.replaceChildren(...kids);
+    loadFiles();
+  }
+  async function loadFiles() {
+    let r; try { r = await fetch('/api/print/files?' + tokq()).then(x => x.json()); } catch (e) { return; }
+    const list = r.files || [];
+    if (!list.length) { files.replaceChildren(sempty('Aucun fichier : glisse un modèle STL ci-dessus.')); return; }
+    const busyNow = /Impression|En pause/.test(stat.textContent);
+    files.replaceChildren(...list.map(f => {
+      const info = el('small', { textContent: `${f.type.toUpperCase()} · ${f.ko.toLocaleString('fr-FR')} Ko · ${f.date}` + (f.duree ? ` · ${f.duree}` + (f.grammes ? ` · ${f.grammes.toFixed(0)} g` : '') : '') });
+      const row = el('div', { className: 'prn-file' }, el('div', { className: 'prn-fn' }, el('b', { textContent: f.name }), info));
+      const sl = el('button', { className: 'btn', textContent: f.duree ? 'Redécouper' : 'Découper' });
+      sl.onclick = () => { sl.disabled = true; sl.textContent = 'Découpe…'; prnPost('/api/print/slice', { rel: f.rel }).then(x => {
+        say(x.ok ? `${f.name} : ${x.duree}` + (x.grammes ? `, ${x.grammes.toFixed(0)} g de PLA` : '') : (x.why || 'Découpe impossible'), !x.ok); loadFiles(); }); };
+      const pr = el('button', { className: 'btn main' });
+      twoClick(pr, 'Imprimer', 'Plateau dégagé ? Confirmer', () => { pr.disabled = true; pr.textContent = 'Lancement…';
+        prnPost('/api/print/start', { rel: f.rel, confirm: true }).then(x => { say(x.ok ? `Impression de ${f.name} lancée : surveille la première couche.` : (x.why || 'Impossible'), !x.ok); lastKey = ''; status(); }); });
+      if (busyNow) pr.disabled = true;
+      const del = el('button', { className: 'btn del' });
+      twoClick(del, 'Supprimer', 'Confirmer (corbeille)', () => prnPost('/api/print/cmd', { action: 'delete', rel: f.rel }).then(x => { say(x.ok ? f.name + ' mis à la corbeille.' : (x.why || 'Impossible'), !x.ok); loadFiles(); }));
+      const v3 = el('button', { className: 'btn', textContent: 'Voir en 3D', on: { click: () => window.M3D && M3D.open(f.id, f.name) } });
+      row.append(el('div', { className: 'prn-fa' }, v3, sl, pr, del));
+      return row;
+    }));
+  }
+  async function upload(list) {
+    for (const f of list) {
+      say('Ajout de ' + f.name + '…');
+      const r = await fetch('/api/print/upload?' + tokq() + '&name=' + encodeURIComponent(f.name), { method: 'POST', body: f }).then(x => x.json()).catch(() => ({ ok: false }));
+      say(r.ok ? r.name + ' ajouté.' : (r.why || 'Ajout impossible'), !r.ok);
+    }
+    loadFiles();
+  }
+  drop.onclick = () => pick.click();
+  pick.onchange = () => upload([...pick.files]);
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); upload([...e.dataTransfer.files]); });
+  loadFiles(); status(); prnTimer = setInterval(status, 3000);
+}
+
+function showNote(file, view) {
+  view.textContent = 'Chargement…';
+  fetch('/api/dashboard/note?name=' + encodeURIComponent(file) + '&token=' + encodeURIComponent(window.JTOKEN))
+    .then(r => r.json()).then(n => { if (noteSel !== file) return; view.innerHTML = n.ok ? `<h2 style="margin-top:0">${esc(n.title)}</h2>` + md(n.md) : ''; })
+    .catch(() => { view.textContent = 'Note illisible.'; });
+}
+
+function renderAmbient() {
+  const box = document.getElementById('ambient'), d = DASH;
+  if (!d) return;
+  const lines = [];
+  if (d.weather) lines.push(d.weather);
+  const a = d.agenda;
+  if (a && a.ok) {
+    const now = new Date().toTimeString().slice(0, 5), today = a.events.filter(e => e.today);
+    const next = today.find(e => e.time === 'Journée' || e.time >= now);
+    lines.push(next ? `Prochain · <b>${next.time}</b> ${next.title}` : today.length ? 'Plus rien à l’agenda aujourd’hui' : 'Rien à l’agenda aujourd’hui');
+  }
+  const p = d.pcradar;
+  if (p && p.ok) lines.push(`PC Radar · <b>${p.today}</b> visiteur${p.today > 1 ? 's' : ''} aujourd’hui` + (p.tickets ? ` · ${p.tickets} ticket(s)` : ''));
+  box.innerHTML = lines.map(l => `<div>${l.replace(/</g, '&lt;').replace(/&lt;b>/g, '<b>').replace(/&lt;\/b>/g, '</b>')}</div>`).join('');
+}
+setInterval(() => {   // visible seulement quand JARVIS est au repos et que rien n'est ouvert
+  const box = document.getElementById('ambient');
+  box.classList.toggle('on', !pageTab && cardEls.size === 0 && !gaming && ['idle', 'paused', 'listening'].includes(state)
+                            && !!box.firstChild);
+}, 1000);
+
+let sideTimer = null;
+async function loadSide() {
+  clearTimeout(sideTimer);
+  let wait = 45000;
+  if (!gaming) {
+    try {
+      const d = await fetch('/api/dashboard?token=' + encodeURIComponent(window.JTOKEN)).then(r => r.json());
+      if (d.ok) { DASH = d; renderSide(); renderPage(false); renderAmbient(); document.body.classList.toggle('night', !!d.night);
+                  if (d.loading) wait = 4000; }
+    } catch (e) { wait = 10000; }
+  }
+  sideTimer = setTimeout(loadSide, wait);
+}
+renderSide();
+
+// ------------------------------------------------------------------ boutons du bas : clavier, micro, éteindre
+let micMuted = false, listenAll = false;
+function toggleAsk(force) {
+  const box = document.getElementById('askbox'), open = force ?? !box.classList.contains('open');
+  box.classList.toggle('open', open);
+  document.getElementById('btnKeys').classList.toggle('on', open);
+  if (open) setTimeout(() => document.getElementById('askinput').focus(), 30);
+}
+function sendAsk() {
+  const inp = document.getElementById('askinput'), v = inp.value.trim();
+  if (!v) return;
+  send('ask:' + v);
+  inp.value = '';
+  toggleAsk(false);
+}
+function setAllBtn(a) {  // bouton mode : « Sur Jarvis » (de base) <-> « Tout écouter » (répond à tout)
+  if (a === listenAll) return;
+  listenAll = a;
+  const b = document.getElementById('btnAll');
+  b.classList.toggle('listen', a);
+  b.querySelector('span').textContent = a ? 'Écoute tout' : 'Sur « Jarvis »';
+  hudKey = '';
+  renderHudbar();
+}
+function setPausedBtn(p) {  // bouton Pause : devient « Reprendre » quand JARVIS est en pause
+  const b = document.getElementById('btnPause');
+  b.classList.toggle('on', p);
+  b.querySelector('.ico-pause').style.display = p ? 'none' : '';
+  b.querySelector('.ico-play').style.display = p ? '' : 'none';
+  b.querySelector('span').textContent = p ? 'Reprendre' : 'Pause';
+}
+function setMuted(m) {
+  if (m === micMuted) return;
+  micMuted = m;
+  const b = document.getElementById('btnMic');
+  b.classList.toggle('muted', m);
+  b.querySelector('.slash').style.display = m ? '' : 'none';
+  b.querySelector('span').textContent = m ? 'Micro coupé' : 'Micro';
+  hudKey = '';
+  renderHudbar();
+}
+
+// ------------------------------------------------------------------ fil de la conversation (petites fenêtres)
+const chatEl = document.getElementById('chat');
+const chatEls = new Map();  // id -> élément
+let chatShow = true;
+function renderChat(d) {
+  chatShow = d.show !== false;
+  chatEl.style.display = chatShow ? '' : 'none';
+  const ids = new Set();
+  // seulement le dernier échange : sa phrase, puis la réponse de JARVIS en dessous
+  const items = d.items || [], last = items[items.length - 1];
+  const shown = !last ? [] : (last.role === 'jarvis' && items.length > 1 && items[items.length - 2].role === 'user')
+    ? items.slice(-2) : [last];
+  for (const m of shown) {
+    if (chatGone.get(m.id) === m.text) continue;  // déjà effacé (et rien de nouveau dedans)
+    ids.add(m.id);
+    let e = chatEls.get(m.id);
+    if (!e) {
+      e = el('div', { className: 'msg ' + m.role },
+        el('div', { className: 'who', textContent: m.role === 'user' ? 'TOI' : 'J.A.R.V.I.S' }), el('div', { className: 'tx' }));
+      chatEls.set(m.id, e);
+      chatEl.append(e);
+    }
+    const t = m.text.length > 260 ? '… ' + m.text.slice(-260) : m.text;  // longue réponse : la fin, qui avance
+    const tx = e.querySelector('.tx');
+    if (tx.textContent !== t || e.dataset.done !== String(!!m.done)) e._upd = Date.now();  // dernière nouveauté
+    tx.textContent = t;
+    e.dataset.full = m.text;
+    e.dataset.done = String(!!m.done);
+    e.classList.toggle('long', m.role === 'jarvis' && m.text.length > 160);
+    e.classList.toggle('live', !m.done);
+    e.classList.remove('gone');
+  }
+  for (const [id, e] of chatEls) if (!ids.has(id)) { e.remove(); chatEls.delete(id); }
+}
+// l'échange s'efface tout seul : 8 s après la dernière nouveauté (même si JARVIS n'a pas répondu et que le message
+// est resté « en cours »), une seule fois : il ne revient pas tant que le texte ne change pas
+const chatGone = new Map();  // id -> texte au moment de l'effacement
+setInterval(() => {
+  const els = [...chatEls.entries()];
+  if (!els.length) return;
+  const last = Math.max(...els.map(([, e]) => e._upd || 0));
+  const wait = els.every(([, e]) => e.dataset.done === 'true') ? 8000 : 12000;
+  if (Date.now() - last < wait) return;
+  for (const [id, e] of els) {
+    chatGone.set(id, e.dataset.full);
+    e.classList.add('gone');
+    setTimeout(() => { e.remove(); chatEls.delete(id); }, 900);
+  }
+}, 500);
+
+// ------------------------------------------------------------------ minuteurs visuels
+let TIMERS = [];
+const timersEl = document.getElementById('timers');
+function fmtLeft(s) {
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(sec).padStart(2, '0');
+}
+function renderTimers() {
+  const now = Date.now() / 1000;
+  timersEl.replaceChildren(...TIMERS.map(t => {
+    const left = t.end - now, frac = Math.max(0, Math.min(1, left / t.total)), C = 2 * Math.PI * 19;
+    const svg = `<svg viewBox="0 0 46 46"><circle class="bg" cx="23" cy="23" r="19"/><circle class="fg" cx="23" cy="23" r="19"
+      stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - frac)}"/></svg>`;
+    const box = el('div', { className: 'timer' + (left <= 0 ? ' done' : ''), innerHTML: svg });
+    box.append(el('div', {}, el('div', { className: 't', textContent: left > 0 ? fmtLeft(left) : 'Terminé' }),
+      el('div', { className: 'l', textContent: t.label || 'Minuteur' })),
+      el('button', { className: 'cx', title: 'Arrêter', textContent: '✕', on: { click: () => send('timer_cancel:' + t.id) } }));
+    return box;
+  }));
+}
+setInterval(() => { if (TIMERS.length) renderTimers(); }, 500);
+
+// ------------------------------------------------------------------ globe 3D (CesiumJS, imagerie satellite Esri)
+let viewer = null, globeSeq = 0, cesiumLoading = null;
+function loadCesium() {
+  if (window.Cesium) return Promise.resolve();
+  if (cesiumLoading) return cesiumLoading;
+  const base = 'https://cdn.jsdelivr.net/npm/cesium@1.121.0/Build/Cesium/';
+  window.CESIUM_BASE_URL = base;
+  cesiumLoading = new Promise((ok, ko) => {
+    document.head.append(el('link', { rel: 'stylesheet', href: base + 'Widgets/widgets.css' }));
+    const s = el('script', { src: base + 'Cesium.js' });
+    s.onload = ok; s.onerror = ko;
+    document.head.append(s);
+  });
+  return cesiumLoading;
+}
+async function ensureViewer() {
+  await loadCesium();
+  if (viewer) return viewer;
+  const C = window.Cesium;
+  viewer = new C.Viewer('globeView', {
+    baseLayer: new C.ImageryLayer(new C.UrlTemplateImageryProvider({
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      credit: 'Esri, Maxar, Earthstar Geographics', maximumLevel: 19 })),
+    terrainProvider: new C.EllipsoidTerrainProvider(), animation: false, timeline: false, geocoder: false,
+    homeButton: false, sceneModePicker: false, baseLayerPicker: false, navigationHelpButton: false,
+    fullscreenButton: false, infoBox: false, selectionIndicator: false });
+  viewer.imageryLayers.addImageryProvider(new C.UrlTemplateImageryProvider({
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    credit: 'Esri' }));
+  viewer.scene.skyAtmosphere.show = true;
+  viewer.scene.globe.enableLighting = false;
+  viewer.scene.backgroundColor = C.Color.fromCssColorString('#01060c');
+  return viewer;
+}
+function closeGlobe() { document.getElementById('globe').classList.remove('open'); }
+function pin(C, lon, lat, name, color) {
+  return viewer.entities.add({ position: C.Cartesian3.fromDegrees(lon, lat),
+    point: { pixelSize: 10, color: C.Color.fromCssColorString(color || '#00d2ff'), outlineColor: C.Color.WHITE, outlineWidth: 2 },
+    label: { text: name, font: '600 15px Bahnschrift, sans-serif', fillColor: C.Color.WHITE, outlineColor: C.Color.BLACK,
+      outlineWidth: 3, style: C.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new C.Cartesian2(0, -22) } });
+}
+window.onGlobe = async (g) => {
+  if (!g || g.seq === globeSeq) return;
+  globeSeq = g.seq;
+  const box = document.getElementById('globe'), info = document.getElementById('globeInfo');
+  if (g.action === 'close') { closeGlobe(); return; }
+  if (pageTab) openPage(null);
+  box.classList.add('open');
+  document.getElementById('globeTitle').textContent = 'Chargement…';
+  try { await ensureViewer(); } catch (e) { document.getElementById('globeTitle').textContent = 'Globe indisponible'; return; }
+  const C = window.Cesium;
+  viewer.resize();
+  viewer.entities.removeAll();
+  info.style.display = 'none';
+  if (g.action === 'earth') {
+    document.getElementById('globeTitle').textContent = 'TERRE';
+    document.getElementById('globeSub').textContent = 'Vue spatiale';
+    viewer.camera.flyTo({ destination: C.Cartesian3.fromDegrees(2.35, 30, 20000000), duration: 2.5 });
+  } else if (g.action === 'fly') {
+    document.getElementById('globeTitle').textContent = g.name;
+    document.getElementById('globeSub').textContent = `${g.lat.toFixed(3)}°, ${g.lon.toFixed(3)}°`;
+    pin(C, g.lon, g.lat, g.name);
+    // vue inclinée VISANT le lieu (au centre), à la bonne distance selon sa taille (monument, ville, pays)
+    viewer.camera.flyToBoundingSphere(new C.BoundingSphere(C.Cartesian3.fromDegrees(g.lon, g.lat), 10), { duration: 3.5,
+      offset: new C.HeadingPitchRange(0, C.Math.toRadians(g.height < 50000 ? -50 : -89), g.height * 1.4) });
+  } else if (g.action === 'route') {
+    document.getElementById('globeTitle').textContent = `${g.a.name} → ${g.b.name}`;
+    document.getElementById('globeSub').textContent = g.info || '';
+    pin(C, g.a.lon, g.a.lat, g.a.name, '#3df0a0');
+    pin(C, g.b.lon, g.b.lat, g.b.name, '#ffa040');
+    const pts = (g.coords || [[g.a.lon, g.a.lat], [g.b.lon, g.b.lat]]).flat();
+    const line = viewer.entities.add({ polyline: { positions: C.Cartesian3.fromDegreesArray(pts), width: 5, clampToGround: true,
+      material: new C.PolylineGlowMaterialProperty({ glowPower: 0.25, color: C.Color.fromCssColorString('#00d2ff') }) } });
+    if (g.info) { info.textContent = 'ITINÉRAIRE · ' + g.info; info.style.display = 'block'; }
+    viewer.flyTo(line, { duration: 3, offset: new C.HeadingPitchRange(0, C.Math.toRadians(-70), 0) });
+  }
+};
+
+// ------------------------------------------------------------------ connexion
+let ws = null;
+let state = 'loading', target = 0, level = 0, taskLabel = '', gaming = false, gameHud = false;
+// bande de la tablette pendant une partie : le tableau de bord de jeu (page légère) remplace la sphère
+function setGameHud(on) {
+  if (on === gameHud) return;
+  gameHud = on;
+  let f = document.getElementById('gamehud');
+  if (on && !f) {
+    f = document.createElement('iframe'); f.id = 'gamehud'; f.src = '/dash?hud=1'; f.title = 'Tableau de bord de jeu';
+    f.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:60;background:#02060c';
+    document.body.appendChild(f);
+  } else if (!on && f) f.remove();
+}
+function send(m) { if (ws && ws.readyState === 1) ws.send(m); }
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'screen') { screen = d; lastChange = Date.now(); renderScreen(); syncSettings(); }
+    else if (d.type === 'chat') renderChat(d);
+    else if (d.type === 'uix') { TIMERS = d.timers || []; renderTimers(); if (window.onGlobe) onGlobe(d.globe); if (window.CAM3D) CAM3D.state(d.cam); dashState(d.dash); if (window.M3D) M3D.state(d.m3d); }
+    else { state = d.state; target = d.level; taskLabel = d.task || ''; gaming = !!d.gaming; setGameHud(!!d.hud); setMuted(!!d.muted); setAllBtn(!!d.all); setPausedBtn(state === 'paused'); renderHudbar(); }
+  };
+  // JARVIS relancé pendant que la fenêtre restait ouverte : la clé de la page a changé, tout était refusé
+  // (« Aucun clip » alors qu'il y en avait 15). Reconnecté : clé encore bonne ? sinon on recharge la page.
+  ws.onopen = () => {
+    if (!wsWasOpen) { wsWasOpen = true; return; }
+    fetch('/api/clips?' + 'token=' + encodeURIComponent(window.JTOKEN))
+      .then(r => { if (r.status === 403) location.reload(); }).catch(() => {});
+  };
+  ws.onclose = () => { state = 'offline'; target = 0; setTimeout(connect, 1500); };
+}
+let wsWasOpen = false;
+connect();
+loadSide();
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('askbox').classList.contains('open')) { toggleAsk(false); return; }
+  if (screen.settings) { send('close_settings'); return; }
+  if (pageTab) { openPage(null); return; }
+  if (document.getElementById('globe').classList.contains('open')) { closeGlobe(); return; }
+  const lastId = [...cardEls.keys()].pop();
+  if (lastId !== undefined) send('close:' + lastId);
+});
+
+// ------------------------------------------------------------------ sphère
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W, H;
+// Écran à zoom élevé (tablette en écran secondaire : 960×600 « points » à 200 %) : le canevas est dessiné à la
+// vraie finesse de l'écran (sinon la sphère est agrandie et floue). Plafonné à x2 pour ménager la carte graphique.
+let DPR = 1;
+function resize() {
+  W = innerWidth; H = innerHeight; DPR = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize);
+resize();
+
+const COLORS = {
+  loading: [80, 100, 130], idle: [30, 140, 255], listening: [0, 220, 255],
+  thinking: [150, 90, 255], speaking: [110, 235, 255], offline: [60, 60, 70], paused: [45, 55, 80],
+  working: [255, 160, 40],  // tâche en cours dans une application
+};
+const LABELS = {
+  loading: 'INITIALISATION', idle: 'SYSTÈMES EN LIGNE', listening: "À L'ÉCOUTE", thinking: 'ANALYSE',
+  speaking: 'RÉPONSE', offline: 'HORS LIGNE', paused: 'EN PAUSE',
+};
+hudReady = true;
+renderHudbar();
+const col = [80, 100, 130];
+let ox = innerWidth / 2, oy = innerHeight / 2, ob = Math.min(innerWidth, innerHeight) * 0.17;
+
+// DOUBLE-clic sur la sphère = pause / reprise (un simple clic pour ramener la fenêtre ne change rien).
+cv.addEventListener('dblclick', (e) => {
+  if (Math.hypot(e.clientX - ox, e.clientY - oy) > ob * 1.6) return;
+  // sur la tablette, deux touchers sur la sphère faisaient une pause sans le vouloir (récap coupé, 2026-10-19) :
+  // sur petit écran, seulement le bouton Pause
+  if (innerWidth < 1100 || innerHeight < 700) return;
+  send('toggle_pause');
+});
+// Tablette : glisser le doigt à gauche / à droite sur la sphère change de vue (accueil → agenda → rappels → … → API)
+cv.style.touchAction = 'pan-y';
+let swipe = null;
+cv.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') swipe = { x: e.clientX, y: e.clientY, t: Date.now() }; });
+addEventListener('pointerup', (e) => {
+  if (!swipe) return;
+  const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y, dt = Date.now() - swipe.t;
+  swipe = null;
+  if (Math.abs(dx) > 90 && Math.abs(dy) < 70 && dt < 700) {
+    const order = [null, ...TABS.map(t => t[0]).filter(k => k !== 'camera' && k !== 'dash')];
+    const i = order.indexOf(pageTab);
+    openPage(order[(i + (dx < 0 ? 1 : -1) + order.length) % order.length]);
+  }
+});
+cv.addEventListener('mousemove', (e) => {
+  cv.style.cursor = Math.hypot(e.clientX - ox, e.clientY - oy) <= ob * 1.6 ? 'pointer' : 'default';
+});
+
+// ---- sphère 3D : points répartis régulièrement (spirale de Fibonacci), reliés à leurs plus proches voisins
+const NP = 320, PTS = [], EDGES = [];
+for (let i = 0; i < NP; i++) {
+  const y = 1 - (i / (NP - 1)) * 2, rad = Math.sqrt(1 - y * y), th = i * 2.399963;
+  PTS.push({ x: Math.cos(th) * rad, y, z: Math.sin(th) * rad, ph: Math.random() * 6.283, ph2: Math.random() * 6.283 });
+}
+{
+  const seen = new Set();
+  for (let i = 0; i < NP; i++) {
+    const d = [];
+    for (let j = 0; j < NP; j++) if (j !== i) {
+      const a = PTS[i], b = PTS[j];
+      d.push([(a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2, j]);
+    }
+    d.sort((u, v) => u[0] - v[0]);
+    for (let k = 0; k < 3; k++) {
+      const j = d[k][1], key = i < j ? i * 1000 + j : j * 1000 + i;
+      if (!seen.has(key)) { seen.add(key); EDGES.push([i, j]); }
+    }
+  }
+}
+const P = new Float32Array(NP * 3);  // x, y écran + profondeur (-1 derrière, +1 devant)
+const NI = 140, INNER = [];  // poussière lumineuse à l'intérieur de la sphère
+for (let i = 0; i < NI; i++) {
+  const u = Math.random() * 2 - 1, a = Math.random() * 6.283, rr = 0.15 + Math.random() * 0.7, q = Math.sqrt(1 - u * u);
+  INNER.push({ x: Math.cos(a) * q * rr, y: u * rr, z: Math.sin(a) * q * rr, ph: Math.random() * 6.283 });
+}
+let bgGrad = null, bgW = 0, bgH = 0;
+
+function hud(R, r, g, b, amp, spin) {
+  ctx.save();
+  ctx.translate(ox, oy);
+  const c = (a) => `rgba(${r},${g},${b},${a})`;
+  // couronne de barres audio (bouge avec la voix)
+  const nb = 96, r0 = R * 1.18;
+  ctx.beginPath();
+  for (let k = 0; k < nb; k++) {
+    const a = (k / nb) * Math.PI * 2;
+    const len = 2 + amp * R * 0.42 * (0.3 + 0.7 * Math.abs(Math.sin(k * 1.7 + t * 9) * Math.sin(k * 0.43 - t * 5)));
+    ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+    ctx.lineTo(Math.cos(a) * (r0 + len), Math.sin(a) * (r0 + len));
+  }
+  ctx.strokeStyle = c(0.3 + amp * 0.6); ctx.lineWidth = 2; ctx.stroke();
+  // onde qui part de la sphère quand il parle / quand tu parles
+  if (amp > 0.05) {
+    for (let w = 0; w < 2; w++) {
+      const ph = (t * 1.6 + w * 0.5) % 1;
+      ctx.beginPath(); ctx.arc(0, 0, R * (1.05 + ph * 0.6), 0, Math.PI * 2);
+      ctx.strokeStyle = c(amp * 0.55 * (1 - ph)); ctx.lineWidth = 1.5 + amp * 2; ctx.stroke();
+    }
+  }
+  // anneau gradué
+  const rt = R * 1.5;
+  ctx.beginPath(); ctx.arc(0, 0, rt, 0, Math.PI * 2);
+  ctx.strokeStyle = c(0.16); ctx.lineWidth = 1; ctx.stroke();
+  ctx.beginPath();
+  for (let k = 0; k < 120; k++) {
+    const a = (k / 120) * Math.PI * 2 + t * 0.03, L = k % 10 === 0 ? 11 : k % 5 === 0 ? 6 : 3;
+    ctx.moveTo(Math.cos(a) * rt, Math.sin(a) * rt);
+    ctx.lineTo(Math.cos(a) * (rt + L), Math.sin(a) * (rt + L));
+  }
+  ctx.strokeStyle = c(0.38); ctx.stroke();
+  // arcs qui tournent en sens inverse
+  ctx.lineCap = 'round';
+  const arcs = [[R * 1.65, 0.5, [[0, 0.9], [1.5, 2.3], [3.4, 4.7], [5.2, 5.6]], 2.2, 0.6],
+                [R * 1.33, -0.8, [[0.3, 1.4], [2.6, 3.0], [4.0, 5.5]], 1.2, 0.45],
+                [R * 1.8, 0.15, [[0, 0.25], [1.05, 1.3], [2.1, 2.35], [3.15, 3.4], [4.2, 4.45], [5.25, 5.5]], 3, 0.35]];
+  for (const [rr, sp, segs, w, al] of arcs) {
+    ctx.beginPath();
+    for (const [s0, s1] of segs) {
+      ctx.moveTo(Math.cos(s0 + t * sp * spin) * rr, Math.sin(s0 + t * sp * spin) * rr);
+      ctx.arc(0, 0, rr, s0 + t * sp * spin, s1 + t * sp * spin);
+    }
+    ctx.strokeStyle = c(al); ctx.lineWidth = w; ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+  for (let k = 0; k < 3; k++) {  // satellites lumineux sur l'anneau extérieur
+    const a = t * 0.5 * spin + k * 2.094, rr = R * 1.65;
+    ctx.beginPath(); ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr, 2.6, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${Math.min(255, r + 120)},${Math.min(255, g + 60)},255,0.95)`; ctx.fill();
+  }
+  // petits repères en croix
+  ctx.beginPath();
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    ctx.moveTo(dx * R * 1.9, dy * R * 1.9); ctx.lineTo(dx * R * 2.02, dy * R * 2.02);
+  }
+  ctx.strokeStyle = c(0.5); ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+}
+
+let t = 0, last = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (document.getElementById('dashov')) return;   // tableau de bord par-dessus : la sphère ne se dessine pas
+  // Jeu ou appli en plein écran : la sphère s'ARRÊTE net (plus d'animation au ralenti qui faisait « bugué »,
+  // et zéro image dessinée = rien pris au jeu). Elle repart toute seule à la fin.
+  if ((gaming || gameHud) && document.visibilityState !== 'hidden') return;
+  if (now - last < 33) return;
+  last = now;
+  t += 1 / 30;
+  level += (target - level) * (target > level ? 0.5 : 0.15);
+  const c = COLORS[state] || COLORS.idle;
+  for (let i = 0; i < 3; i++) col[i] += (c[i] - col[i]) * 0.12;
+  const [r, g, b] = col.map(Math.round);
+
+  // petit écran (tablette) : la sphère prend une plus grande part de la place
+  const sw = sideW(), room = Math.min(W - sw, H), tb = room * (room < 650 ? 0.21 : 0.17);
+  ox += (sw + (W - sw) / 2 - ox) * 0.12; oy += (H / 2 - oy) * 0.12; ob += (tb - ob) * 0.12;
+
+  if (!bgGrad || bgW !== W || bgH !== H) {
+    bgGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+    bgGrad.addColorStop(0, '#08172a'); bgGrad.addColorStop(0.5, '#040b17'); bgGrad.addColorStop(1, '#010309');
+    bgW = W; bgH = H;
+  }
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  const calm = state === 'idle' || state === 'loading' || state === 'offline' || state === 'paused';
+  const amp = Math.min(level, 1);
+  const R = ob * (1 + (state === 'paused' ? -0.1 : calm ? Math.sin(t * 1.2) * 0.02 : 0) + amp * 0.2);
+  const spin = state === 'thinking' ? 2.6 : state === 'working' ? 1.8 : state === 'paused' ? 0.15 : 1;
+
+  // halo
+  const halo = ctx.createRadialGradient(ox, oy, R * 0.2, ox, oy, R * 2.2);
+  halo.addColorStop(0, `rgba(${r},${g},${b},${(calm ? 0.16 : 0.24) + amp * 0.2})`);
+  halo.addColorStop(0.5, `rgba(${r},${g},${b},0.04)`);
+  halo.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(ox - R * 2.2, oy - R * 2.2, R * 4.4, R * 4.4);
+
+  hud(ob, r, g, b, amp, spin);
+
+  // projection 3D (rotation Y + légère inclinaison X, perspective)
+  const ay = t * 0.35 * spin, ax = 0.35 + Math.sin(t * 0.21) * 0.18;
+  const cy = Math.cos(ay), sy = Math.sin(ay), cx = Math.cos(ax), sx = Math.sin(ax);
+  for (let i = 0; i < NP; i++) {
+    const p = PTS[i];
+    const wob = 1 + amp * 0.32 * (0.6 * Math.sin(t * 7 + p.ph) + 0.4 * Math.sin(t * 4.3 + p.ph2))
+              + Math.sin(t * 1.3 + p.ph) * 0.012;
+    const x = p.x * wob, y = p.y * wob, z = p.z * wob;
+    const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
+    const y1 = y * cx - z1 * sx, z2 = y * sx + z1 * cx;
+    const k = 1 / (1 - z2 * 0.32);
+    P[i * 3] = ox + x1 * R * k; P[i * 3 + 1] = oy + y1 * R * k; P[i * 3 + 2] = z2;
+  }
+  ctx.globalCompositeOperation = 'lighter';  // lueur : ce qui se superpose brille davantage
+  // poussière intérieure (tourne un peu moins vite : effet de profondeur)
+  ctx.beginPath();
+  for (const q of INNER) {
+    const x1 = q.x * cy + q.z * sy, z1 = -q.x * sy + q.z * cy, y1 = q.y * cx - z1 * sx;
+    const s = 1 + amp * 1.5 * (0.5 + 0.5 * Math.sin(t * 6 + q.ph));
+    ctx.rect(ox + x1 * R - s / 2, oy + y1 * R - s / 2, s, s);
+  }
+  ctx.fillStyle = `rgba(${r},${g},${b},${0.35 + amp * 0.4})`;
+  ctx.fill();
+  // liaisons, de l'arrière vers l'avant (3 profondeurs, un seul tracé chacune)
+  const bucket = [[], [], []];
+  for (const [i, j] of EDGES) {
+    const z = (P[i * 3 + 2] + P[j * 3 + 2]) / 2;
+    bucket[z < -0.25 ? 0 : z < 0.3 ? 1 : 2].push(i, j);
+  }
+  const ea = [0.07, 0.17, 0.36];
+  for (let bk = 0; bk < 3; bk++) {
+    const L = bucket[bk];
+    ctx.beginPath();
+    for (let n = 0; n < L.length; n += 2) {
+      const i = L[n] * 3, j = L[n + 1] * 3;
+      ctx.moveTo(P[i], P[i + 1]); ctx.lineTo(P[j], P[j + 1]);
+    }
+    ctx.strokeStyle = `rgba(${r},${g},${b},${ea[bk] + amp * 0.18})`;
+    ctx.lineWidth = bk === 2 ? 1.1 : 0.8;
+    ctx.stroke();
+  }
+  // points
+  for (let bk = 0; bk < 3; bk++) {
+    ctx.beginPath();
+    for (let i = 0; i < NP; i++) {
+      const z = P[i * 3 + 2], zb = z < -0.25 ? 0 : z < 0.3 ? 1 : 2;
+      if (zb !== bk) continue;
+      const s = 0.8 + (z + 1) * 0.9 + amp * 1.2;
+      ctx.moveTo(P[i * 3] + s, P[i * 3 + 1]);
+      ctx.arc(P[i * 3], P[i * 3 + 1], s, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = bk === 2 ? `rgba(${Math.min(255, r + 120)},${Math.min(255, g + 60)},255,${0.85})`
+                             : `rgba(${r},${g},${b},${bk ? 0.55 : 0.25})`;
+    ctx.fill();
+  }
+  // halo doux autour des points de devant
+  ctx.beginPath();
+  for (let i = 0; i < NP; i++) {
+    if (P[i * 3 + 2] < 0.2) continue;
+    const s = 7 + amp * 8;
+    ctx.rect(P[i * 3] - s / 2, P[i * 3 + 1] - s / 2, s, s);
+  }
+  ctx.fillStyle = `rgba(${r},${g},${b},${0.05 + amp * 0.05})`;
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  // cœur lumineux
+  const core = ctx.createRadialGradient(ox, oy, 0, ox, oy, R * 0.55);
+  core.addColorStop(0, `rgba(255,255,255,${(calm ? 0.18 : 0.3) + amp * 0.35})`);
+  core.addColorStop(0.35, `rgba(${r},${g},${b},${0.12 + amp * 0.2})`);
+  core.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = core;
+  ctx.fillRect(ox - R * 0.55, oy - R * 0.55, R * 1.1, R * 1.1);
+
+  const fs = Math.max(14, Math.round(ob / 7.5));
+  ctx.textAlign = 'center';
+  // Tâche en cours : anneau de progression qui tourne + étape écrite sous la sphère
+  if (state === 'working') {
+    const rr = ob * 1.42, a0 = t * 2.2;
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 2; k++) {
+      const s0 = a0 + k * Math.PI, len = 0.9 + Math.sin(t * 1.7 + k) * 0.35;
+      ctx.strokeStyle = `rgba(${r},${g},${b},0.95)`; ctx.lineWidth = Math.max(3, ob / 24);
+      ctx.beginPath(); ctx.arc(ox, oy, rr, s0, s0 + len); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+    ctx.font = `600 ${Math.round(fs * 0.72)}px "Bahnschrift", "Segoe UI", sans-serif`;
+    ctx.fillStyle = `rgba(${r},${g},${b},0.95)`;
+    ctx.fillText('TÂCHE EN COURS', ox, oy + ob * 2.05 + fs * 0.6);
+    if (taskLabel) {
+      ctx.font = `${fs}px "Segoe UI", sans-serif`;
+      ctx.fillStyle = 'rgba(235,245,250,0.92)';
+      ctx.fillText(taskLabel.length > 60 ? taskLabel.slice(0, 58) + '…' : taskLabel, ox, oy + ob * 2.05 + fs * 1.9);
+    }
+  } else {
+    // état (« À L'ÉCOUTE »...) et action rapide en cours (« J'ouvre Discord »)
+    ctx.font = `600 ${Math.round(fs * 0.68)}px "Bahnschrift", "Segoe UI", sans-serif`;
+    ctx.fillStyle = `rgba(${r},${g},${b},0.85)`;
+    const lab = (LABELS[state] || '').split('').join(String.fromCharCode(8202));  // lettres espacées
+    ctx.fillText(lab, ox, oy + ob * 2.05 + fs * 0.6);
+    if (taskLabel) {
+      ctx.font = `${fs}px "Segoe UI", sans-serif`;
+      ctx.fillStyle = 'rgba(235,245,250,0.9)';
+      ctx.fillText(taskLabel.length > 60 ? taskLabel.slice(0, 58) + '…' : taskLabel, ox, oy + ob * 2.05 + fs * 1.9);
+    }
+  }
+}
+requestAnimationFrame(frame);
+
+// ---- horloge en haut, façon interface Stark
+const JOURS = ['DIMANCHE', 'LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI'];
+const MOIS = ['JANVIER', 'FÉVRIER', 'MARS', 'AVRIL', 'MAI', 'JUIN', 'JUILLET', 'AOÛT', 'SEPTEMBRE', 'OCTOBRE',
+              'NOVEMBRE', 'DÉCEMBRE'];
+function tickClock() {
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  document.getElementById('clk-hm').textContent = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  document.getElementById('clk-s').textContent = p(d.getSeconds());
+  document.getElementById('clk-d').textContent = `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}`;
+}
+tickClock();
+setInterval(tickClock, 1000);
+</script>
+<script src="/camera3d.js"></script>
+<script src="/viewer3d.js"></script>
+</body>
+</html>

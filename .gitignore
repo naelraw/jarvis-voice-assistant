@@ -1,0 +1,15 @@
+# sauvegardes et fichiers générés
+*.bak
+__pycache__/
+*.pyc
+*.log
+.venv/
+venv/
+
+# jamais de secrets ici : ils restent dans %USERPROFILE%\.openjarvis
+*.key
+*.pem
+.env
+jarvis_mobile_key
+jarvis_*.json
+jarvis_voice.toml

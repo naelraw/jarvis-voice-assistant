@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#02060c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
+<link rel="manifest" href="/m/manifest.json">
+<link rel="apple-touch-icon" href="/m/icon.png">
+<title>JARVIS</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #02060c; color: #d6ecf5;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; touch-action: manipulation; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100dvh; display: block; }
+  #clock { position: fixed; top: calc(env(safe-area-inset-top) + 18px); left: 0; right: 0; text-align: center;
+    pointer-events: none; }
+  #clock .hm { font-size: 44px; font-weight: 200; letter-spacing: 5px; color: #e8f6ff; text-shadow: 0 0 18px rgba(0,210,255,.45); }
+  #clock .d { margin-top: 4px; font-size: 11px; letter-spacing: 4px; color: rgba(0,210,255,.85); }
+  #clock .pc { margin-top: 6px; font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: rgba(214,236,245,.45); }
+  #info { position: fixed; left: 24px; right: 24px; bottom: calc(env(safe-area-inset-bottom) + 118px);
+    text-align: center; pointer-events: none; }
+  #state { font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: rgba(0,210,255,.9); }
+  #task { margin-top: 10px; font-size: 15px; color: #e8f6ff; min-height: 20px; }
+  #sub { margin-top: 10px; font-size: 14px; line-height: 1.45; color: rgba(214,236,245,.7); min-height: 40px;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    transition: opacity .8s; }
+  /* boutons du bas : peu nombreux, gros, une icône + un mot */
+  #bar { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 18px); z-index: 5;
+    display: flex; justify-content: center; gap: 12px; padding: 0 12px; }
+  #bar button { width: 58px; height: 74px; border: 0; background: none; color: #d6ecf5; font: inherit; padding: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  #bar .ic { width: 50px; height: 50px; border-radius: 50%; border: 1px solid rgba(0,210,255,.35);
+    background: rgba(0,210,255,.07); display: flex; align-items: center; justify-content: center; }
+  #bar svg { width: 22px; height: 22px; stroke: #bfeaff; fill: none; stroke-width: 1.8; stroke-linecap: round;
+    stroke-linejoin: round; }
+  #bar .lb { font-size: 10px; letter-spacing: 1px; color: rgba(214,236,245,.7); }
+  #bar button.on .ic { background: rgba(255,170,40,.18); border-color: rgba(255,170,40,.7); }
+  #bar button.on svg { stroke: #ffc46b; }
+  #bar button:active .ic { transform: scale(.92); }
+  /* clavier : zone de saisie au-dessus du clavier de l'iPhone (placée avec visualViewport) */
+  #kb { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: none; flex-direction: column; gap: 8px;
+    padding: 14px 12px calc(env(safe-area-inset-bottom) + 10px);
+    background: linear-gradient(to top, rgba(2,8,16,.98) 62%, rgba(2,8,16,0)); }
+  #kb.on { display: flex; animation: kbin .22s ease-out; }
+  @keyframes kbin { from { transform: translateY(24px); opacity: 0; } }
+  #kb .box { display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 8px; border-radius: 30px;
+    background: rgba(8,28,44,.82); border: 1px solid rgba(0,210,255,.45); backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px); box-shadow: 0 0 22px rgba(0,210,255,.16), inset 0 0 14px rgba(0,210,255,.05); }
+  #kb .box:focus-within { border-color: rgba(0,225,255,.9); box-shadow: 0 0 26px rgba(0,210,255,.3), inset 0 0 14px rgba(0,210,255,.08); }
+  #kb input { flex: 1; min-width: 0; height: 44px; border: 0; background: transparent; color: #eaf8ff; padding: 0 8px;
+    font: 17px -apple-system, system-ui, sans-serif; outline: none; }
+  #kb input::placeholder { color: rgba(190,225,240,.42); }
+  #kb .kbx, #kb .kbs { flex: none; display: flex; align-items: center; justify-content: center; border: 0; padding: 0;
+    border-radius: 50%; transition: transform .12s, opacity .15s, background .15s; -webkit-tap-highlight-color: transparent; }
+  #kb .kbx { width: 36px; height: 36px; background: rgba(255,255,255,.07); color: rgba(214,236,245,.75); }
+  #kb .kbs { width: 44px; height: 44px; color: #02131c; background: linear-gradient(145deg, #5af0ff, #00b4e6);
+    box-shadow: 0 0 16px rgba(0,210,255,.55); }
+  #kb .kbs:disabled { opacity: .32; background: rgba(120,160,180,.5); box-shadow: none; }
+  #kb .kbs:not(:disabled):active { transform: scale(.88); }
+  #kb svg { width: 21px; height: 21px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round;
+    stroke-linejoin: round; }
+  #kb .kbx svg { width: 16px; height: 16px; stroke-width: 2.2; }
+  #kbs { min-height: 18px; text-align: center; font-size: 13px; color: rgba(190,225,240,.75); display: none; }
+  #kbs.on { display: block; } #kbs.bad { color: #ffb36b; }
+  /* notes : feuille plein écran, gardées sur le téléphone puis envoyées au PC */
+  #nt { position: fixed; inset: 0; z-index: 9; display: none; flex-direction: column; gap: 12px; overflow-y: auto;
+    padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 18px);
+    background: radial-gradient(120% 70% at 50% 0%, #07243a, #02080f 70%); }
+  #nt.on { display: flex; animation: kbin .22s ease-out; }
+  #nt .nth { display: flex; align-items: center; gap: 10px; }
+  #nt .nth b { font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: rgba(0,210,255,.95); }
+  #nt #ntc { flex: 1; font-size: 12px; color: rgba(190,225,240,.7); text-align: right; }
+  #nt #ntc.bad { color: #ffb36b; }
+  #nt .x { width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); color: #d6ecf5; font-size: 16px; }
+  #nt textarea { width: 100%; min-height: 120px; resize: none; border-radius: 18px; padding: 14px 16px; color: #eaf8ff;
+    background: rgba(8,28,44,.82); border: 1px solid rgba(0,210,255,.4); outline: none; font: 17px/1.4 -apple-system, system-ui, sans-serif; }
+  #nt textarea:focus { border-color: rgba(0,225,255,.9); box-shadow: 0 0 20px rgba(0,210,255,.25); }
+  #nt .ntb { display: flex; gap: 10px; }
+  #nt .ntb button { flex: 1; height: 48px; border-radius: 24px; border: 1px solid rgba(0,210,255,.5); color: #e6f8ff;
+    background: rgba(0,210,255,.1); font: 600 15px -apple-system, system-ui, sans-serif; display: flex; align-items: center;
+    justify-content: center; gap: 8px; -webkit-tap-highlight-color: transparent; }
+  #nt .ntb button:active { transform: scale(.97); }
+  #nt .ntb #nts { background: linear-gradient(145deg, #5af0ff, #00b4e6); color: #02131c; border: 0; }
+  #nt .ntb #nts:disabled { opacity: .3; background: rgba(120,160,180,.5); }
+  #nt .ntb #ntm.rec { background: rgba(255,70,70,.18); border-color: rgba(255,110,110,.8); color: #ffb3b3; }
+  #nt .ntb #ntm.rec svg { stroke: #ff8a8a; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  #nt svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #nt #ntm2 { min-height: 18px; font-size: 13px; color: rgba(190,225,240,.75); text-align: center; }
+  #nt #ntm2.bad { color: #ffb36b; }
+  #nt .item { display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: 14px;
+    background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.07); }
+  #nt .item .tx { flex: 1; min-width: 0; font-size: 14px; line-height: 1.35; color: #dcefff; overflow-wrap: anywhere; }
+  #nt .item small { display: block; margin-top: 3px; font-size: 11px; letter-spacing: .5px; color: rgba(190,225,240,.55); }
+  #nt .item .st { flex: none; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 7px; border-radius: 9px;
+    border: 1px solid rgba(255,180,87,.5); color: #ffb36b; }
+  #nt .item .st.ok { border-color: rgba(91,227,160,.5); color: #5be3a0; }
+  #nt .item .st.err { border-color: rgba(255,110,110,.6); color: #ff8a8a; }
+  #nt .item .del { flex: none; width: 28px; height: 28px; border: 0; border-radius: 50%; background: none; color: rgba(214,236,245,.45); font-size: 15px; }
+  /* notes en attente d'envoi (PC éteint) : une ligne discrète au-dessus de la barre ; un toucher ouvre la liste */
+  /* état de la liaison avec le PC, en haut à gauche : vert = connecté, orange = injoignable, gris = connexion en cours */
+  #pcs { position: fixed; left: 14px; top: calc(env(safe-area-inset-top) + 14px); z-index: 4; display: flex; align-items: center;
+    gap: 7px; padding: 6px 11px 6px 9px; border-radius: 14px; font: 600 11px -apple-system, system-ui, sans-serif; letter-spacing: .6px;
+    background: rgba(4,16,26,.6); border: 1px solid rgba(150,180,200,.3); color: rgba(200,222,235,.8);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); pointer-events: none; }
+  #pcs i { width: 8px; height: 8px; border-radius: 50%; background: #8aa3b4; animation: pulse 1.1s ease-in-out infinite; }
+  #pcs.on { border-color: rgba(91,227,160,.45); color: #8ff0c0; } #pcs.on i { background: #38e08c; box-shadow: 0 0 8px #38e08c; animation: none; }
+  #pcs.off { border-color: rgba(255,180,87,.5); color: #ffc98a; } #pcs.off i { background: #ffa83d; box-shadow: 0 0 8px #ffa83d; animation: none; }
+  #pend { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 118px); z-index: 4;
+    display: none; white-space: nowrap; padding: 7px 14px; border-radius: 16px; border: 1px solid rgba(255,180,87,.45); background: rgba(40,24,6,.55);
+    color: #ffc98a; font: 12px -apple-system, system-ui, sans-serif; letter-spacing: .5px; }
+  #pend.on { display: block; }
+  #ovb { display: none; margin-top: 18px; padding: 14px 26px; border-radius: 26px; border: 0; font: inherit;
+    font-size: 16px; color: #02060c; background: #00d2ff; }
+  /* écran du PC / appareil photo, par-dessus tout ; un toucher ferme (ou prend la photo tout de suite) */
+  #ov { position: fixed; inset: 0; z-index: 10; display: none; background: rgba(2,6,12,.96); align-items: center;
+    justify-content: center; flex-direction: column; }
+  #ov.on { display: flex; }
+  #ov img, #ov video { max-width: 100%; max-height: 82dvh; object-fit: contain; border-radius: 8px; }
+  #ov video { width: 100%; }
+  #ovt { margin-top: 14px; font-size: 13px; letter-spacing: 3px; text-transform: uppercase; color: rgba(0,210,255,.9);
+    text-align: center; padding: 0 20px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="clock"><div class="hm" id="hm">--:--</div><div class="d" id="dt"></div><div class="pc" id="pc">__PC_NAME__</div></div>
+<div id="ov"><img id="ovi" alt=""><video id="ovv" playsinline muted autoplay></video><div id="ovt"></div><button id="ovb">Ouvrir</button></div>
+<div id="bar">
+  <button id="bPause"><span class="ic"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></span><span class="lb">Pause</span></button>
+  <button id="bMic"><span class="ic"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span class="lb">Micro</span></button>
+  <button id="bKb"><span class="ic"><svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M7.5 14h9"/></svg></span><span class="lb">Clavier</span></button>
+  <button id="bClips"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/></svg></span><span class="lb">Clips</span></button>
+</div>
+<form id="kb" autocomplete="off">
+  <div id="kbs"></div>
+  <div class="box">
+    <button type="button" class="kbx" id="kbx" aria-label="Fermer le clavier"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <input id="kbi" type="text" enterkeyhint="send" autocapitalize="sentences" maxlength="500" placeholder="Écris à JARVIS…" aria-label="Message pour JARVIS">
+    <button type="button" class="kbs" id="kbsend" aria-label="Envoyer" disabled><svg viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></button>
+  </div>
+</form>
+<div id="nt">
+  <div class="nth"><b>Notes</b><span id="ntc"></span><button type="button" class="x" id="ntx" aria-label="Fermer">✕</button></div>
+  <textarea id="nti" placeholder="Écris une note… Elle reste sur ton téléphone si le PC est éteint, puis part toute seule." maxlength="20000"></textarea>
+  <div class="ntb">
+    <button type="button" id="ntm"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>Dicter</span></button>
+    <button type="button" id="nts" disabled>Enregistrer</button>
+  </div>
+  <div id="ntm2"></div>
+  <div id="ntl"></div>
+</div>
+<div id="pcs"><i></i><span>connexion au PC…</span></div>
+<button type="button" id="pend"></button>
+<div id="info"><div id="state">connexion…</div><div id="task"></div><div id="sub"></div></div>
+<script>
+// ---- clé de jumelage (QR code des paramètres de JARVIS sur le PC)
+const h = new URLSearchParams(location.hash.slice(1));
+let KEY = h.get('k') || '';
+try { if (KEY) localStorage.setItem('jk', KEY); else KEY = localStorage.getItem('jk') || ''; } catch (e) {}
+// la clé reste dans l'adresse et dans le manifeste : « Sur l'écran d'accueil » la garde (iPhone : stockage séparé de Safari)
+function keepKey() {
+  if (!KEY) return;
+  history.replaceState(null, '', '/m#k=' + KEY);
+  const m = document.querySelector('link[rel="manifest"]'); if (m) m.href = '/m/manifest.json?k=' + encodeURIComponent(KEY);
+}
+keepKey();
+const $ = (id) => document.getElementById(id);
+// la galerie s'ouvre PAR-DESSUS cette page (pas de changement de page : le micro reste autorisé et actif)
+// pendant la galerie, le son et le micro de JARVIS sont mis de côté (sinon l'iPhone coupe la vidéo en boucle : le micro et le
+// son de la page se disputent la sortie audio) ; le micro n'est PAS refermé (une nouvelle demande réafficherait « Autoriser ? »)
+function galleryAudio(open) {
+  galleryOpen = open;
+  try { if (navigator.audioSession) navigator.audioSession.type = open ? 'playback' : 'play-and-record'; } catch (e) {}
+  const mic = window._mic; if (mic) mic.stream.getTracks().forEach(t => { t.enabled = !open; });
+  if (ac) (open ? ac.suspend() : ac.resume()).catch(() => {});
+  if (!open) lastMic = Date.now();
+}
+$('bClips').onclick = () => {
+  if ($('clipsf')) return;
+  galleryAudio(true);
+  const f = document.createElement('iframe'); f.id = 'clipsf'; f.src = '/m/clips?k=' + encodeURIComponent(KEY);
+  f.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:30;background:#02060c';
+  document.body.appendChild(f);
+};
+addEventListener('message', (e) => { if (e.data === 'jarvis-close' && $('clipsf')) { $('clipsf').remove(); galleryAudio(false); } });
+const api = (path, body) => fetch(path, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json',
+  'X-Jarvis-Key': KEY }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+
+// ---- états : start (un toucher pour activer le son, si l'iPhone l'exige), idle (il écoute en continu),
+//      paused (pause commune avec le PC : seul « Jarvis » le réveille), hearing (tu parles), thinking,
+//      speaking (il répond), offline, pair
+let mode = KEY ? 'start' : 'pair', pcText = '', pcState = '', level = 0, target = 0;
+function show(st, sub) {
+  const S = { pair: 'jumelage nécessaire', start: 'touche l’écran pour activer jarvis', idle: 'je t’écoute',
+              paused: 'en pause · dis « jarvis, reprends »', hearing: 'je t’écoute', thinking: 'je m’en occupe',
+              speaking: 'jarvis', offline: 'connexion au pc…' };
+  $('state').textContent = (S[st] || '') + ((mode === 'idle' || mode === 'paused') && pcText ? ' · ' + pcText : '');
+  if (pcDown && st !== 'pair') $('state').textContent = 'pc injoignable · ce que tu écris ou dis est gardé en note';
+  if (sub !== undefined) { $('sub').textContent = sub; $('sub').style.opacity = 1; armSub(); }
+}
+function setMode(m, sub) { mode = m; show(m, sub); }
+if (!KEY) {
+  setMode('pair', 'Jumelage automatique…');
+  // même compte Tailscale que le PC : jumelage automatique, sans QR code
+  fetch('/api/m/autopair').then(r => r.json()).then(d => {
+    if (d.ok && d.key) { KEY = d.key; try { localStorage.setItem('jk', KEY); } catch (e) {} keepKey(); location.reload(); }
+    else setMode('pair', 'Sur le PC : JARVIS ⚙ Paramètres → Téléphone, puis scanne le QR code.');
+  }).catch(() => setMode('pair', 'Sur le PC : JARVIS ⚙ Paramètres → Téléphone, puis scanne le QR code.'));
+} else show('start', '');
+
+// ---- JARVIS ouvert sur le téléphone : il s'ouvre aussi sur le PC
+function hello() { if (KEY) api('/api/m/hello', {}).catch(() => {}); }
+hello();
+
+// ---- liaison en direct avec le PC : ta voix part en continu, sa voix revient au fur et à mesure
+let ws = null, wsOk = false, paused = false, serverThinking = false;
+function connect() {
+  if (!KEY || document.hidden || (ws && ws.readyState <= 1)) return;   // appli en arrière-plan : pas de liaison
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/m/ws');
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => { ws.send(JSON.stringify({ key: KEY })); wsOk = true; pcDown = false; if (typeof applyBar === 'function') applyBar(); if (mode === 'offline') setMode(ready() ? rest() : 'start', ''); if (typeof syncNotes === 'function') syncNotes(); };
+  ws.onclose = () => { wsOk = false; if (document.hidden) return; if (typeof applyBar === 'function') applyBar(); if (typeof checkPc === 'function') checkPc();
+    if (mode !== 'pair' && mode !== 'start') setMode('offline'); setTimeout(connect, 1500); };
+  ws.onerror = () => {};
+  ws.onmessage = (e) => {
+    if (typeof e.data !== 'string') { play(e.data); return; }
+    const d = JSON.parse(e.data);
+    if (d.ev === 'flush') { stopSpeaking(); return; }
+    if (d.ev === 'image') { showImage(d.jpg); return; }
+    if (d.ev === 'camera') { takePhoto(); return; }
+    if (d.ev === 'open') { showOpen(d.url, d.label); return; }
+    if (d.ev !== 'state') return;
+    pcText = d.game ? 'pc en jeu' : '';
+    serverThinking = d.thinking;
+    if (d.paused !== paused) {   // pause commune : demandée ici ou sur le PC
+      paused = d.paused; $('bPause').classList.toggle('on', paused);
+      $('bPause').querySelector('.lb').textContent = paused ? 'Reprendre' : 'Pause';
+      if (paused && mode !== 'speaking') setMode('paused', '');
+      if (!paused && mode === 'paused') setMode('idle', '');
+    }
+    if (d.heard) setSub('« ' + d.heard + ' »');
+    if (d.sub) setSub(d.sub);
+    if (mode === 'idle' && serverThinking) setMode('thinking');
+    else if (mode === 'thinking' && !serverThinking && !speakingNow()) setMode(rest());
+    else show(mode);
+  };
+}
+connect();
+
+// ---- son + micro ouverts en continu, tant que l'appli est ouverte
+let ac = null, analyser = null, micOn = false, lastMic = 0, starting = false, galleryOpen = false;
+const rest = () => paused ? 'paused' : 'idle';
+const ready = () => micOn && ac && ac.state === 'running';
+async function start() {
+  if (starting) return false;
+  starting = true;
+  try {
+    // son + micro ensemble, sur le haut-parleur, même si l'iPhone est en silencieux
+    try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) {}
+    // le micro d'abord : quand une page écoute déjà, l'iPhone la laisse démarrer le son sans toucher l'écran
+    const stream = micOn ? null : await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (!ac || ac.state === 'closed') {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = ac.createAnalyser(); analyser.fftSize = 512; analyser.connect(ac.destination);
+      ac.onstatechange = () => { if (!galleryOpen && ac.state !== 'running' && ac.state !== 'closed') ac.resume().catch(() => {}); };
+    }
+    if (ac.state !== 'running') await ac.resume().catch(() => {});
+    if (stream) openMic(stream);
+    if (ready()) {
+      lastMic = Date.now();
+      if (mode === 'start') setMode(wsOk ? rest() : 'offline', '');
+      return true;
+    }
+    return false;
+  } finally { starting = false; }
+}
+function closeMic() {
+  const m = window._mic; window._mic = null; micOn = false;
+  if (m) { try { m.proc.disconnect(); m.src.disconnect(); } catch (e) {} m.stream.getTracks().forEach(t => { t.onended = null; t.stop(); }); }
+}
+// appli quittée (TikTok, YouTube…) : le micro et le son sont RENDUS à l'iPhone immédiatement, sinon la page garde la sortie
+// audio (« play-and-record ») et coupe / bugue le son des autres applis ; ils sont rouverts seuls au retour dans l'appli
+let hideT = 0;
+function releaseAudio() {
+  if (typeof memo !== 'undefined' && memo) memoStop();   // appli quittée pendant un mémo : ce qui est enregistré est gardé
+  // la liaison avec le PC est coupée aussi : sinon il continuait de parler (alertes, réponses) appli fermée, avec le
+  // lecteur média « …ts.net » en haut de l'écran ; elle revient quand on rouvre l'appli
+  try { if (ws) { ws.onclose = null; ws.close(); } } catch (e) {}
+  ws = null; wsOk = false;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'auto'; } catch (e) {}
+  try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'; } catch (e) {}
+  closeMic();
+  if (ac && ac.state !== 'closed') { ac.onstatechange = null; ac.close().catch(() => {}); }
+  ac = null; analyser = null; micOn = false;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) releaseAudio();   // tout de suite, sans délai
+});
+addEventListener('pagehide', releaseAudio);
+addEventListener('blur', () => { if (document.hidden) releaseAudio(); });
+// le micro ne doit jamais rester coupé : si l'iPhone l'interrompt (appel, autre son, retour dans l'appli), on le rouvre seul
+setInterval(async () => {
+  if (!KEY || mode === 'pair' || document.hidden || starting || galleryOpen) return;
+  if (ready() && Date.now() - lastMic < 2500) return;
+  // micro toujours vivant (son simplement suspendu) : on relance le son SANS redemander le micro
+  // (chaque nouvelle demande de micro fait réapparaître « Autoriser ? » sur l'iPhone)
+  const live = window._mic && window._mic.stream.getTracks().some(t => t.readyState === 'live');
+  if (live && ac) {
+    if (ac.state !== 'running') await ac.resume().catch(() => {});
+    if (ac.state === 'running') { lastMic = Date.now(); return; }
+    if (Date.now() - lastMic < 15000) return;
+  }
+  closeMic();
+  if (!(await start().catch(() => false)) && !speakingNow()) setMode('start', '');
+}, 1500);
+
+// ---- micro -> PC (16 kHz, morceaux de 100 ms)
+let out = new Int16Array(1600), outN = 0;
+const VAD = { noise: 0.004, run: 0, silence: 0, chunks: [], pre: [], t0: 0, voiced: 0 };
+function openMic(stream) {
+  const src = ac.createMediaStreamSource(stream), proc = ac.createScriptProcessor(2048, 1, 1), mute = ac.createGain();
+  mute.gain.value = 0; src.connect(proc); proc.connect(mute); mute.connect(ac.destination);
+  proc.onaudioprocess = (e) => { lastMic = Date.now(); onMic(e.inputBuffer.getChannelData(0)); };
+  stream.getTracks().forEach(t => t.onended = () => { micOn = false; });   // rouvert par la surveillance ci-dessus
+  window._mic = { stream, src, proc, mute };
+  micOn = true;
+}
+function onMic(d) {
+  if (memo) { memo.chunks.push(new Float32Array(d)); memo.n += d.length; return; }   // mémo vocal : rien vers le PC
+  let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] * d[i];
+  const rms = Math.sqrt(s / (d.length / 4));
+  const voiced = rms > Math.max(0.018, VAD.noise * 3.5);
+  if (!voiced) VAD.noise = Math.min(0.03, 0.96 * VAD.noise + 0.04 * rms);
+  if (muted) { if (paused) return; target *= 0.8; d = new Float32Array(d.length); }
+  else if (paused) { pausedVad(d, rms, voiced); return; }
+  if (!speakingNow() && !muted) {
+    target *= 0.8;   // la sphère ne bouge que quand JARVIS parle, pas sur ta voix
+    if (voiced && (mode === 'idle' || mode === 'hearing')) { if (mode !== 'hearing') setMode('hearing'); hearT = Date.now(); }
+    else if (mode === 'hearing' && Date.now() - hearT > 1200) setMode(serverThinking ? 'thinking' : rest());
+  }
+  if (!wsOk) return;
+  // envoi en continu (Gemini repère lui-même le début et la fin de ta phrase)
+  const ratio = ac.sampleRate / 16000;
+  for (let x = 0; x < d.length / ratio; x++) {
+    const a = Math.floor(x * ratio), b = Math.max(a + 1, Math.floor((x + 1) * ratio)); let v = 0;
+    for (let k = a; k < b && k < d.length; k++) v += d[k];
+    out[outN++] = Math.max(-1, Math.min(1, v / (b - a))) * 32767;
+    if (outN === out.length) { try { ws.send(out.buffer.slice(0)); } catch (e) {} outN = 0; }
+  }
+}
+let hearT = 0;
+
+// ---- en pause : il écoute seulement si tu l'appelles (« Jarvis, reprends » / « Jarvis, … »)
+function pausedVad(d, rms, voiced) {
+  if (VAD.busy) return;
+  if (!VAD.on) {
+    VAD.pre.push(new Float32Array(d)); if (VAD.pre.length > 8) VAD.pre.shift();
+    VAD.run = voiced ? VAD.run + 1 : 0;
+    if (VAD.run >= 3) { VAD.on = true; VAD.chunks = VAD.pre.slice(); VAD.pre = []; VAD.silence = 0; VAD.voiced = VAD.run; VAD.t0 = Date.now(); }
+    return;
+  }
+  VAD.chunks.push(new Float32Array(d));
+  if (voiced) { VAD.voiced++; VAD.silence = 0; } else VAD.silence += d.length / ac.sampleRate;
+  if (VAD.silence > 0.8 || Date.now() - VAD.t0 > 8000) wakeCheck();
+}
+async function wakeCheck() {
+  const chunks = VAD.chunks, enough = VAD.voiced >= 6; VAD.on = false; VAD.chunks = []; VAD.run = 0;
+  if (!enough) return;
+  VAD.busy = true;
+  try {
+    const res = await api('/api/m/voice', { wav: wavB64(chunks, ac.sampleRate), paused: true });
+    if (res.ok && res.paused === false) { paused = false; setMode('idle', res.heard ? '« ' + res.heard + ' »' : ''); }
+  } catch (e) {}
+  VAD.busy = false;
+}
+function wavB64(chunks, rate) {
+  const n = chunks.reduce((s, c) => s + c.length, 0), all = new Float32Array(n); let o = 0;
+  for (const c of chunks) { all.set(c, o); o += c.length; }
+  const ratio = rate / 16000, m = Math.floor(n / ratio), pcm = new Int16Array(m);
+  for (let i = 0; i < m; i++) {   // moyenne de chaque bloc (sans elle, le son aigu « replie » et Whisper comprend moins bien)
+    const a = Math.floor(i * ratio), b = Math.max(a + 1, Math.floor((i + 1) * ratio)); let v = 0;
+    for (let k = a; k < b && k < n; k++) v += all[k];
+    pcm[i] = Math.max(-1, Math.min(1, v / (b - a))) * 32767;
+  }
+  const buf = new ArrayBuffer(44 + pcm.length * 2), dv = new DataView(buf);
+  const w = (p, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(p + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); dv.setUint32(4, 36 + pcm.length * 2, true); w(8, 'WAVEfmt '); dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true);
+  dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  let s = ''; const b = new Uint8Array(buf);
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+// ---- sa voix : les morceaux arrivent du PC et sont joués à la suite, sans trou (24 kHz)
+let nextT = 0, sources = [];
+const speakingNow = () => ac && ac.currentTime < nextT - 0.02;
+function play(buf) {
+  if (document.hidden) return;   // jamais de son appli fermée
+  if (!ac) return;
+  if (ac.state !== 'running') ac.resume().catch(() => {});
+  const pcm = new Int16Array(buf), f = new Float32Array(pcm.length);
+  for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
+  if (!f.length) return;
+  const b = ac.createBuffer(1, f.length, 24000); b.copyToChannel(f, 0);
+  const src = ac.createBufferSource(); src.buffer = b; src.connect(analyser);
+  nextT = Math.max(nextT, ac.currentTime + 0.06);
+  src.start(nextT); nextT += b.duration;
+  sources.push(src);
+  src.onended = () => { sources = sources.filter(x => x !== src); if (!speakingNow()) setMode(serverThinking ? 'thinking' : rest()); };
+  if (mode !== 'speaking') setMode('speaking');
+}
+function stopSpeaking() {
+  for (const s of sources) { try { s.stop(); } catch (e) {} }
+  sources = []; nextT = 0;
+  if (mode === 'speaking') setMode(rest());
+}
+
+// ---- toucher l'écran : seulement pour le faire taire (ou activer le son si l'iPhone l'a bloqué)
+addEventListener('pointerup', async () => {
+  if (!KEY) return;
+  if (ovTap()) return;
+  askPush();
+  if (speakingNow()) { stopSpeaking(); try { ws.send(JSON.stringify({ stop: true })); } catch (e) {} return; }   // « tais-toi »
+  if (!(await start().catch(() => false))) setMode('start', 'Autorise le micro pour parler à JARVIS.');
+});
+if (KEY) start().catch(() => {});
+
+// ---- « montre-moi l'écran du PC » : capture affichée 20 s (un toucher ferme)
+let ovTimer = 0, cam = null, camShoot = null;
+function ovClose() {
+  clearTimeout(ovTimer); $('ov').className = ''; $('ovi').removeAttribute('src'); $('ovb').style.display = 'none';
+  if (cam) { cam.getTracks().forEach(t => t.stop()); cam = null; $('ovv').srcObject = null; }
+}
+function ovTap() {
+  if (!$('ov').classList.contains('on')) return false;
+  if (camShoot) camShoot(); else ovClose();
+  return true;
+}
+function showImage(b64) {
+  ovClose();
+  $('ovv').style.display = 'none'; $('ovi').style.display = '';
+  $('ovi').src = 'data:image/jpeg;base64,' + b64;
+  $('ovt').textContent = 'écran du pc · touche pour fermer';
+  $('ov').className = 'on';
+  ovTimer = setTimeout(ovClose, 20000);
+}
+// ---- « regarde ça » : appareil photo arrière, photo dans 4 s (ou au toucher), envoyée au PC
+async function takePhoto() {
+  ovClose();
+  let sent = false;
+  const send = (jpg) => { if (sent) return; sent = true; api('/api/m/photo', { jpg }).catch(() => {}); };
+  try {
+    cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1600 } }, audio: false });
+  } catch (e) { send(''); return; }
+  const v = $('ovv');
+  $('ovi').style.display = 'none'; v.style.display = '';
+  v.srcObject = cam; v.play().catch(() => {});
+  $('ov').className = 'on';
+  let n = 4;
+  const shoot = () => {
+    camShoot = null; clearInterval(iv);
+    const c = document.createElement('canvas');
+    const k = Math.min(1, 1600 / (v.videoWidth || 1600));
+    c.width = Math.round((v.videoWidth || 1280) * k); c.height = Math.round((v.videoHeight || 720) * k);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    send(c.toDataURL('image/jpeg', 0.85));
+    ovClose();
+  };
+  camShoot = shoot;
+  $('ovt').textContent = 'photo dans ' + n + '… (touche pour la prendre)';
+  const iv = setInterval(() => { n--; if (n <= 0) shoot(); else $('ovt').textContent = 'photo dans ' + n + '… (touche pour la prendre)'; }, 1000);
+}
+
+// ---- JARVIS fait quelque chose sur l'iPhone (appel, SMS, itinéraire, appli…) : l'iPhone veut un toucher
+function showOpen(url, label) {
+  ovClose();
+  $('ovi').style.display = 'none'; $('ovv').style.display = 'none';
+  $('ovt').textContent = label || '';
+  $('ovb').style.display = 'block'; $('ovb').onclick = (e) => { e.stopPropagation(); location.href = url; ovClose(); };
+  $('ov').className = 'on';
+  ovTimer = setTimeout(ovClose, 60000);
+}
+$('ovb').addEventListener('pointerup', (e) => e.stopPropagation());
+
+// ---- ce que tu dis / ce qu'il répond : s'efface 6 s après, comme sur le PC (pas pendant qu'il parle ou réfléchit)
+var subLast = '', subTimer = 0;   // var : show() peut l'utiliser avant cette ligne
+function armSub() {
+  clearTimeout(subTimer);
+  subTimer = setTimeout(() => {
+    if (speakingNow() || mode === 'thinking' || mode === 'hearing') return armSub();
+    $('sub').style.opacity = 0;
+  }, 6000);
+}
+function setSub(t) {   // le PC renvoie le même texte tant qu'il n'y en a pas de nouveau : il ne revient pas
+  if (t === subLast) return;
+  subLast = t; $('sub').textContent = t; $('sub').style.opacity = 1; armSub();
+}
+
+// ---- boutons du bas
+// PC joignable : Pause, Micro, Clavier, Clips ; on parle ou on écrit à JARVIS (« mets ça en note »).
+// PC injoignable : mêmes gestes, mais sans IA : Micro (= mémo vocal) et Clavier (= texte) créent une NOTE gardée sur le téléphone
+// et envoyée au PC dès qu'il répond. Pause et Clips (qui ont besoin du PC) se cachent.
+var pcDown = false;
+const isOff = () => pcDown && !wsOk;
+function applyBar() {
+  const off = isOff();
+  for (const id of ['bPause', 'bClips']) $(id).style.display = off ? 'none' : '';
+  const st = wsOk ? 'on' : pcDown ? 'off' : 'wait';   // pastille en haut à gauche
+  $('pcs').className = st; $('pcs').lastChild.textContent = { on: 'PC connecté', off: 'PC injoignable', wait: 'connexion au PC…' }[st];
+  if (typeof mode !== 'undefined') show(mode);   // le texte d'état suit (« pc injoignable… » / retour à la normale)
+}
+// Le PC est-il vraiment injoignable ? Pas de liaison en direct ne suffit pas (4G, relais Tailscale : elle peut mettre plus de
+// 5 s à s'ouvrir alors que le PC est là) : on vérifie par une vraie requête ; le mode « notes » ne démarre que si elle échoue aussi.
+var probing = false;
+async function checkPc() {
+  if (probing || wsOk || document.hidden) return;
+  probing = true;
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 4000);
+  try { pcDown = !(await fetch('/api/whoami', { cache: 'no-store', signal: ctl.signal })).ok; }
+  catch (e) { pcDown = true; }
+  finally { clearTimeout(to); probing = false; applyBar(); }
+}
+setTimeout(checkPc, 6000);
+setInterval(checkPc, 15000);
+if (!KEY) $('pcs').style.display = 'none';
+applyBar();
+let muted = false;
+if (!KEY) $('bar').style.display = 'none';
+const wsSend = (o) => { try { ws.send(JSON.stringify(o)); } catch (e) {} };
+for (const b of document.querySelectorAll('#bar button')) b.addEventListener('pointerup', (e) => e.stopPropagation());
+$('bPause').onclick = () => wsSend({ cmd: 'pause' });
+// clavier : écrire à JARVIS au lieu de parler (envoyé comme une phrase : il répond de la même façon)
+const kb = $('kb'), kbi = $('kbi');
+function kbPlace() {   // l'iPhone ne redimensionne pas la page : on remonte la zone de saisie au-dessus du clavier
+  const v = window.visualViewport;
+  kb.style.bottom = v ? Math.max(0, window.innerHeight - v.height - v.offsetTop) + 'px' : '0';
+}
+function kbOpen(on) {
+  kb.classList.toggle('on', on); $('bKb').classList.toggle('on', on);
+  $('bar').style.visibility = on ? 'hidden' : '';
+  if (on) {
+    kbUpdate(); kbStatus(''); kbPlace(); setTimeout(() => kbi.focus(), 60);
+    if (ws && ws.readyState === 1 && !paused) wsSend({ cmd: 'warm' });   // le PC ouvre la conversation pendant que tu tapes
+  } else kbi.blur();
+}
+$('bKb').onclick = () => kbOpen(!kb.classList.contains('on'));
+if (window.visualViewport) { visualViewport.addEventListener('resize', kbPlace); visualViewport.addEventListener('scroll', kbPlace); }
+for (const t of ['pointerup', 'pointerdown']) kb.addEventListener(t, (e) => e.stopPropagation());   // pas de « tais-toi »
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && kb.classList.contains('on')) kbOpen(false); });
+// message d'état DANS la zone de saisie (au-dessus du clavier : le sous-titre du milieu serait caché par le clavier)
+function kbStatus(t, bad) { const s = $('kbs'); s.textContent = t || ''; s.classList.toggle('on', !!t); s.classList.toggle('bad', !!bad); }
+function kbUpdate() { $('kbsend').disabled = !kbi.value.trim(); }
+function kbSend() {
+  const t = kbi.value.trim();
+  if (!t) return;
+  if (isOff()) { noteOffline(t); return; }   // PC éteint : ce qui est écrit devient une note (gardée, envoyée au retour du PC)
+  if (!ws || ws.readyState !== 1) { kbStatus('Pas connecté au PC : réessaie dans un instant.', true); return; }
+  wsSend({ cmd: 'text', text: t });   // en pause, le PC reprend : écrire = vouloir une réponse (comme le clavier du PC)
+  setSub('✎ ' + t);   // ce que tu viens d'écrire (sinon rien ne s'affiche : il n'y a pas de transcription)
+  kbi.value = ''; kbUpdate(); kbStatus(''); kbOpen(false);
+}
+kbi.addEventListener('input', () => { kbUpdate(); kbStatus(''); });
+kbi.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); kbSend(); } });
+$('kb').onsubmit = (e) => { e.preventDefault(); kbSend(); };
+// bouton d'envoi : envoi dès le doigt posé et SANS perdre le focus (sinon l'iPhone ferme le clavier, la zone saute et le
+// toucher est perdu : le bouton « ne marchait pas »)
+const sendNow = (e) => { e.preventDefault(); kbSend(); };
+$('kbsend').addEventListener('pointerdown', sendNow);
+$('kbsend').addEventListener('touchstart', sendNow, { passive: false });
+$('kbsend').addEventListener('mousedown', (e) => e.preventDefault());
+$('kbsend').addEventListener('click', (e) => { e.preventDefault(); kbSend(); });
+for (const ev of ['pointerdown', 'touchstart', 'mousedown']) $('kbx').addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+$('kbx').addEventListener('click', () => kbOpen(false));
+$('bMic').onclick = () => {
+  if (isOff() || memo) { memoToggle(); return; }   // PC éteint : le micro enregistre un mémo vocal (= une note)
+  muted = !muted; $('bMic').classList.toggle('on', muted);
+  $('bMic').querySelector('.lb').textContent = muted ? 'Coupé' : 'Micro';
+  if (muted) target = 0;
+};
+
+// ---- notes : gardées SUR LE TÉLÉPHONE (IndexedDB) puis envoyées au PC dès qu'il répond, même PC éteint à l'écriture.
+// Texte ou mémo vocal (le PC le transcrit avec Whisper). L'appli elle-même s'ouvre PC éteint (service worker, /sw.js).
+function ndb() {
+  return window._ndb ? Promise.resolve(window._ndb) : new Promise((res, rej) => {
+    const rq = indexedDB.open('jarvis_notes', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('notes', { keyPath: 'id' });
+    rq.onsuccess = () => { window._ndb = rq.result; res(rq.result); };
+    rq.onerror = () => rej(rq.error);
+  });
+}
+const nreq = (mode, fn) => ndb().then(db => new Promise((res, rej) => {
+  const tx = db.transaction('notes', mode), r = fn(tx.objectStore('notes'));
+  tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error);
+}));
+const nAll = () => nreq('readonly', s => s.getAll()).then(a => (a || []).sort((x, y) => y.t - x.t));
+const nPut = (n) => nreq('readwrite', s => s.put(n)).then(r => { updatePend(); return r; });
+const nDel = (id) => nreq('readwrite', s => s.delete(id)).then(r => { updatePend(); return r; });
+// notes pas encore parties : une ligne discrète au-dessus de la barre (un toucher ouvre la liste, qui permet de les relire/supprimer)
+async function updatePend() {
+  try {
+    const n = (await nAll()).filter(x => x.state !== 'sent').length, p = $('pend');
+    p.textContent = '📝 ' + n + ' note' + (n > 1 ? 's' : '') + ' en attente d’envoi'; p.classList.toggle('on', n > 0);
+  } catch (e) { /* stockage indisponible */ }
+}
+$('pend').onclick = () => ntOpen(true);
+for (const t of ['pointerup', 'pointerdown']) $('pend').addEventListener(t, (e) => e.stopPropagation());
+setTimeout(updatePend, 800);
+// PC éteint : ce qui est écrit au clavier devient une note (la zone se ferme, un message le confirme)
+async function noteOffline(text) {
+  if (!(await noteSave({ id: nId(), t: Date.now(), kind: 'text', text, state: 'pending' }))) { kbStatus('Impossible de garder la note sur le téléphone.', true); return; }
+  kbi.value = ''; kbUpdate(); kbStatus(''); kbOpen(false);
+  setSub('✎ ' + text); setTimeout(() => setSub('Noté ✓ · il part dès que le PC revient'), 1200);
+}
+const nId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+const nt = $('nt'), nti = $('nti');
+function ntMsg(t, bad) { const e = $('ntm2'); e.textContent = t || ''; e.classList.toggle('bad', !!bad); }
+function ntOpen(on) {
+  nt.classList.toggle('on', on);
+  if (on) { renderNotes(); syncNotes(); } else { if (memo) memoStop(); nti.blur(); }
+}
+function fmtDate(t) { const d = new Date(t); return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' · ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+async function renderNotes() {
+  let list = [];
+  try { list = await nAll(); } catch (e) { ntMsg('Stockage du téléphone indisponible : les notes ne seront pas gardées.', true); }
+  const wait = list.filter(n => n.state !== 'sent').length;
+  const c = $('ntc');
+  c.textContent = wsOk ? (wait ? wait + ' en cours d’envoi' : 'PC joignable · tout est envoyé') : 'PC injoignable · notes gardées ici' + (wait ? ' (' + wait + ')' : '');
+  c.classList.toggle('bad', !wsOk && wait > 0);
+  $('ntl').replaceChildren(...list.slice(0, 30).map(n => {
+    const it = document.createElement('div'); it.className = 'item';
+    const tx = document.createElement('div'); tx.className = 'tx';
+    tx.textContent = n.kind === 'audio' ? '🎙 Mémo vocal · ' + Math.floor(n.dur / 60) + ':' + String(n.dur % 60).padStart(2, '0') : n.text.slice(0, 220) + (n.text.length > 220 ? '…' : '');
+    const sm = document.createElement('small'); sm.textContent = fmtDate(n.t) + (n.err ? ' · ' + n.err : ''); tx.append(sm);
+    const st = document.createElement('span'); st.className = 'st' + (n.state === 'sent' ? ' ok' : n.state === 'error' ? ' err' : '');
+    st.textContent = n.state === 'sent' ? 'envoyée' : n.state === 'error' ? 'refusée' : 'en attente';
+    const del = document.createElement('button'); del.className = 'del'; del.type = 'button'; del.textContent = '✕'; del.setAttribute('aria-label', 'Supprimer');
+    del.onclick = () => { if (n.state === 'sent' || confirm('Supprimer cette note du téléphone ? Elle n’a pas encore été envoyée au PC.')) nDel(n.id).then(renderNotes); };
+    it.append(tx, st, del); return it;
+  }));
+  nts.disabled = !nti.value.trim();
+}
+const nts = $('nts');
+async function noteSave(n) { try { await nPut(n); } catch (e) { ntMsg('Impossible de garder la note sur le téléphone.', true); return false; } return true; }
+nti.addEventListener('input', () => { nts.disabled = !nti.value.trim(); ntMsg(''); });
+nts.onclick = async () => {
+  const text = nti.value.trim(); if (!text) return;
+  if (await noteSave({ id: nId(), t: Date.now(), kind: 'text', text, state: 'pending' })) { nti.value = ''; ntMsg('Note gardée.'); await renderNotes(); syncNotes(); }
+};
+let syncing = false;
+async function syncNotes() {   // les plus anciennes d'abord ; rien ne se perd si le PC ne répond pas
+  if (syncing || !KEY) return;
+  syncing = true;
+  try {
+    const todo = (await nAll()).filter(n => n.state !== 'sent' && n.state !== 'error').reverse();
+    for (const n of todo) {
+      const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), n.kind === 'audio' ? 150000 : 15000);
+      let r;
+      try {
+        const resp = await fetch('/api/m/note', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', 'X-Jarvis-Key': KEY },
+          body: JSON.stringify({ id: n.id, t: n.t, kind: n.kind, text: n.text, wav: n.wav }) });
+        r = { status: resp.status, body: await resp.json().catch(() => ({})) };
+      } catch (e) { break; } finally { clearTimeout(to); }
+      if (r.status === 200 && r.body.ok) { n.state = 'sent'; n.wav = null; n.err = ''; await nPut(n); }
+      else if (r.status === 503 || r.status === 502 || r.status === 504 || r.status === 404) break;   // PC pas prêt : plus tard
+      else { n.state = 'error'; n.err = r.status === 403 ? 'jumelage à refaire' : (r.body.error || 'erreur ' + r.status); await nPut(n); }
+    }
+    const all = await nAll();   // on ne garde que les 30 dernières notes envoyées
+    for (const o of all.filter(n => n.state === 'sent').slice(30)) await nDel(o.id);
+  } catch (e) { /* stockage indisponible */ } finally { syncing = false; if (nt.classList.contains('on')) renderNotes(); }
+}
+addEventListener('online', syncNotes);
+setInterval(() => { if (!document.hidden) syncNotes(); }, 20000);
+setTimeout(syncNotes, 1500);
+// mémo vocal : le micro de la page est déjà ouvert ; pendant le mémo rien ne part vers le PC (JARVIS ne répond pas dessus)
+var memo = null, memoT = 0;
+// bouton « Dicter » de la liste ET bouton Micro de la barre (PC éteint) : même état
+function memoUi(on, t) {
+  $('ntm').classList.toggle('rec', on); $('ntm').querySelector('span').textContent = on ? 'Arrêter · ' + t : 'Dicter';
+  $('bMic').classList.toggle('on', on || muted); $('bMic').querySelector('.lb').textContent = on ? 'Arrêter · ' + t : (muted ? 'Coupé' : 'Micro');
+}
+async function memoToggle() {
+  if (memo) return memoStop();
+  if (!micOn || !ac || ac.state !== 'running') {
+    if (!(await start().catch(() => false))) { const m = 'Micro indisponible : autorise-le dans Réglages › Safari › Microphone.'; ntMsg(m, true); setSub(m); return; }
+  }
+  memo = { chunks: [], n: 0, rate: ac.sampleRate, t0: Date.now() };
+  ntMsg(''); setSub('Je t’écoute · touche Micro pour finir');
+  const tick = () => { const s = Math.floor((Date.now() - memo.t0) / 1000); memoUi(true, Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')); if (s >= 300) memoStop(); };
+  tick(); memoT = setInterval(tick, 500);
+}
+async function memoStop() {
+  const m = memo; memo = null; clearInterval(memoT);
+  memoUi(false);
+  if (!m) return;
+  if (m.n < m.rate * 0.8) { ntMsg('Mémo trop court : rien de gardé.'); setSub('Mémo trop court : rien de gardé.'); return; }
+  const dur = Math.round(m.n / m.rate);
+  if (await noteSave({ id: nId(), t: m.t0, kind: 'audio', wav: wavB64(m.chunks, m.rate), dur, state: 'pending' })) {
+    ntMsg('Mémo gardé (' + dur + ' s).'); setSub('Noté ✓ · mémo de ' + dur + ' s, il part dès que le PC revient');
+    await renderNotes(); syncNotes();
+  }
+}
+$('ntm').onclick = memoToggle;
+$('ntx').onclick = () => ntOpen(false);
+for (const t of ['pointerup', 'pointerdown']) nt.addEventListener(t, (e) => e.stopPropagation());
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});   // l'appli s'ouvre PC éteint
+
+// ---- notifications (même appli fermée) : iPhone, appli ajoutée à l'écran d'accueil, iOS 16.4 ou plus
+const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+function b64u(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); const r = atob(s + '='.repeat((4 - s.length % 4) % 4));
+  return Uint8Array.from(r, c => c.charCodeAt(0)); }
+async function pushSubscribe() {
+  if (!pushOk() || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const v = await api('/api/m/vapid');
+      if (!v.ok) return;
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(v.key) });
+    }
+    await api('/api/m/push_sub', { sub: sub.toJSON() });
+  } catch (e) {}
+}
+function askPush() {   // l'iPhone n'autorise la demande qu'après un toucher
+  if (!pushOk() || Notification.permission !== 'default') return;
+  Notification.requestPermission().then(p => { if (p === 'granted') pushSubscribe(); }).catch(() => {});
+}
+if (KEY) pushSubscribe();
+
+// ---- ce que fait le PC (tâche en cours)
+const PC = { working: 'tâche en cours', loading: 'pc démarre' };
+async function poll() {
+  if (!KEY || document.hidden) return;
+  try {
+    const r = await api('/api/m/poll?since=' + (Date.now() / 1000));
+    if (!r.ok) { pcText = 'clé refusée'; show(mode); return; }
+    pcState = r.pc.state;
+    if (!pcText && PC[r.pc.state]) pcText = PC[r.pc.state];
+    $('task').textContent = r.pc.task || '';
+  } catch (e) {}
+}
+poll(); setInterval(poll, 3000);
+// ---- l'écran du téléphone reste allumé tant que l'appli est ouverte (sinon l'iPhone se verrouille et coupe tout)
+let wakeLock = null;
+async function keepAwake() {
+  try {
+    if ('wakeLock' in navigator && !document.hidden && (!wakeLock || wakeLock.released)) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch (e) { /* refusé (batterie faible, mode économie) : rien de grave */ }
+}
+keepAwake();
+addEventListener('pointerup', keepAwake);   // certains iPhone ne l'acceptent qu'après un toucher
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  keepAwake();
+  poll(); hello(); connect(); start().catch(() => {});   // retour dans l'appli : micro relancé, JARVIS rouvert sur le PC
+});
+
+// ---- horloge
+const JOURS = ['DIMANCHE', 'LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI'];
+const MOIS = ['JANVIER', 'FÉVRIER', 'MARS', 'AVRIL', 'MAI', 'JUIN', 'JUILLET', 'AOÛT', 'SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE', 'DÉCEMBRE'];
+function tick() {
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  $('hm').textContent = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  $('dt').textContent = `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]}`;
+}
+tick(); setInterval(tick, 1000);
+
+// ---- la sphère (même style que sur le PC : points reliés en 3D, anneaux, réagit à la voix)
+const cv = $('c'), ctx = cv.getContext('2d');
+let W, H, DPR;
+function resize() { DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); }
+addEventListener('resize', resize); resize();
+const NP = 220, PTS = [], EDGES = [];
+for (let i = 0; i < NP; i++) { const y = 1 - (i / (NP - 1)) * 2, r = Math.sqrt(1 - y * y), th = i * 2.399963;
+  PTS.push({ x: Math.cos(th) * r, y, z: Math.sin(th) * r, ph: Math.random() * 6.28 }); }
+{ const seen = new Set();
+  for (let i = 0; i < NP; i++) { const d = [];
+    for (let j = 0; j < NP; j++) if (j !== i) { const a = PTS[i], b = PTS[j]; d.push([(a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2, j]); }
+    d.sort((u, v) => u[0] - v[0]);
+    for (let k = 0; k < 3; k++) { const j = d[k][1], key = Math.min(i, j) * 1000 + Math.max(i, j); if (!seen.has(key)) { seen.add(key); EDGES.push(i, j); } } } }
+const P = new Float32Array(NP * 3), col = [30, 140, 255];
+const COLORS = { idle: [30, 140, 255], listening: [0, 230, 255], thinking: [150, 90, 255], speaking: [110, 235, 255],
+                 offline: [70, 80, 95], pair: [70, 80, 95], start: [70, 90, 120], hearing: [0, 230, 255], paused: [40, 70, 110] };
+const lvlBuf = new Uint8Array(256);
+let t = 0;
+(function frame() {
+  requestAnimationFrame(frame);
+  t += 1 / 60;
+  if (mode === 'speaking' && analyser && speakingNow()) {
+    analyser.getByteTimeDomainData(lvlBuf); let s = 0;
+    for (const v of lvlBuf) s += ((v - 128) / 128) ** 2;
+    target = Math.min(1, Math.sqrt(s / lvlBuf.length) * 6);
+  } else if (mode === 'speaking') target = 0.25 + Math.abs(Math.sin(t * 9)) * 0.3;
+  else if (mode !== 'hearing' && mode !== 'idle') target = 0;
+  level += (target - level) * (target > level ? 0.45 : 0.12);
+  const c = COLORS[mode] || COLORS.idle; for (let i = 0; i < 3; i++) col[i] += (c[i] - col[i]) * 0.08;
+  const [r, g, b] = col.map(Math.round), amp = level;
+  const ox = W / 2, oy = H * 0.46, ob = Math.min(W, H) * 0.27;
+  const R = ob * (1 + amp * 0.18 + (mode === 'idle' ? Math.sin(t * 1.2) * 0.02 : 0));
+  const spin = mode === 'thinking' ? 2.6 : 1;
+  ctx.fillStyle = '#02060c'; ctx.fillRect(0, 0, W, H);
+  const halo = ctx.createRadialGradient(ox, oy, R * 0.2, ox, oy, R * 2.1);
+  halo.addColorStop(0, `rgba(${r},${g},${b},${0.2 + amp * 0.25})`); halo.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
+  // anneaux
+  ctx.save(); ctx.translate(ox, oy); ctx.lineCap = 'round';
+  ctx.beginPath(); for (let k = 0; k < 72; k++) { const a = k / 72 * 6.283, len = 2 + amp * ob * 0.35 * (0.3 + 0.7 * Math.abs(Math.sin(k * 1.7 + t * 9)));
+    ctx.moveTo(Math.cos(a) * ob * 1.18, Math.sin(a) * ob * 1.18); ctx.lineTo(Math.cos(a) * (ob * 1.18 + len), Math.sin(a) * (ob * 1.18 + len)); }
+  ctx.strokeStyle = `rgba(${r},${g},${b},${0.3 + amp * 0.6})`; ctx.lineWidth = 1.6; ctx.stroke();
+  for (const [rr, sp, segs, w, al] of [[ob * 1.5, 0.5, [[0, 0.9], [1.6, 2.4], [3.4, 4.6]], 2, 0.55], [ob * 1.32, -0.8, [[0.3, 1.4], [2.6, 3.0], [4.0, 5.4]], 1.2, 0.4]]) {
+    ctx.beginPath(); for (const [s0, s1] of segs) { const a0 = s0 + t * sp * spin; ctx.moveTo(Math.cos(a0) * rr, Math.sin(a0) * rr); ctx.arc(0, 0, rr, a0, s1 + t * sp * spin); }
+    ctx.strokeStyle = `rgba(${r},${g},${b},${al})`; ctx.lineWidth = w; ctx.stroke(); }
+  if (amp > 0.05) for (let w = 0; w < 2; w++) { const ph = (t * 1.6 + w * 0.5) % 1;
+    ctx.beginPath(); ctx.arc(0, 0, R * (1.05 + ph * 0.6), 0, 6.283); ctx.strokeStyle = `rgba(${r},${g},${b},${amp * 0.5 * (1 - ph)})`; ctx.lineWidth = 1.5 + amp * 2; ctx.stroke(); }
+  ctx.restore();
+  // sphère
+  const ay = t * 0.35 * spin, ax = 0.35 + Math.sin(t * 0.21) * 0.18, cy = Math.cos(ay), sy = Math.sin(ay), cx = Math.cos(ax), sx = Math.sin(ax);
+  for (let i = 0; i < NP; i++) { const p = PTS[i], wob = 1 + amp * 0.3 * Math.sin(t * 7 + p.ph);
+    const x = p.x * wob, y = p.y * wob, z = p.z * wob, x1 = x * cy + z * sy, z1 = -x * sy + z * cy, y1 = y * cx - z1 * sx, z2 = y * sx + z1 * cx, k = 1 / (1 - z2 * 0.32);
+    P[i * 3] = ox + x1 * R * k; P[i * 3 + 1] = oy + y1 * R * k; P[i * 3 + 2] = z2; }
+  ctx.globalCompositeOperation = 'lighter';
+  for (const front of [false, true]) { ctx.beginPath();
+    for (let n = 0; n < EDGES.length; n += 2) { const i = EDGES[n] * 3, j = EDGES[n + 1] * 3; if ((P[i + 2] + P[j + 2] > 0) !== front) continue; ctx.moveTo(P[i], P[i + 1]); ctx.lineTo(P[j], P[j + 1]); }
+    ctx.strokeStyle = `rgba(${r},${g},${b},${(front ? 0.4 : 0.1) + amp * 0.15})`; ctx.lineWidth = front ? 1 : 0.7; ctx.stroke(); }
+  ctx.beginPath();
+  for (let i = 0; i < NP; i++) { const z = P[i * 3 + 2], s = 0.8 + (z + 1) * 0.9 + amp; ctx.moveTo(P[i * 3] + s, P[i * 3 + 1]); ctx.arc(P[i * 3], P[i * 3 + 1], s, 0, 6.283); }
+  ctx.fillStyle = `rgba(${Math.min(255, r + 110)},${Math.min(255, g + 60)},255,0.75)`; ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+})();
+</script>
+</body>
+</html>
